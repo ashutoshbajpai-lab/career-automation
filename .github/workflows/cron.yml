@@ -1,31 +1,37 @@
-name: 24/7 Cloud Automation & Keepalive Cron
+name: 10-Hour Daily Active Cloud Shift & Keepalive Cron
 
 on:
   schedule:
-    # Runs every 10 minutes (Keeps Render free tier awake 24/7/365 without sleeping)
-    - cron: '*/10 * * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI anytime
+    # Runs every 15 minutes during the 10-hour active window (03:00 to 13:59 UTC = 08:30 AM to 07:30 PM IST)
+    - cron: '*/15 3-13 * * *'
+  workflow_dispatch: # Allows manual run anytime from GitHub
 
 jobs:
-  keepalive_and_scheduler:
+  ten_hour_active_shift:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Meraki Command Center Keepalive
+      - name: Ping Cloud Server Keepalive (10-Hour Active Shift)
         run: |
           echo "Pinging Cloud Server Keepalive..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://career-command-center-vqpj.onrender.com/api/stats || echo "000")
-          echo "Keepalive ping response code: $STATUS"
+          echo "Server status code: $STATUS"
 
-      - name: Daily Morning Autopilot Trigger (03:30 UTC / 09:00 AM IST)
+      - name: Coordinate Shift Operations (Morning 09:00 AM & Midday 02:00 PM IST)
         run: |
           CURRENT_HOUR=$(date -u +"%H")
           CURRENT_MIN=$(date -u +"%M")
-          echo "UTC Hour: $CURRENT_HOUR, UTC Min: $CURRENT_MIN"
-          
-          # Between 03:30 and 03:45 UTC corresponds to 09:00 - 09:15 AM Indian Standard Time (IST)
+          echo "Current UTC Time: $CURRENT_HOUR:$CURRENT_MIN"
+
+          # 03:30 UTC = 09:00 AM IST: Morning Autopilot (Naukri Boost, 50+ Apply, Inbox Sweep)
           if [ "$CURRENT_HOUR" -eq "03" ] && [ "$CURRENT_MIN" -ge "25" ] && [ "$CURRENT_MIN" -le "45" ]; then
-            echo "--> It is 09:00 AM IST! Triggering Full Autonomous Career Engine..."
+            echo "--> [09:00 AM IST] Starting Morning 10-Hour Shift: Firing Full Master Autopilot..."
             curl -s -X POST https://career-command-center-vqpj.onrender.com/api/run/run_all || true
+          
+          # 08:30 UTC = 02:00 PM IST: Midday Recency Boost & Second Batch Apply
+          elif [ "$CURRENT_HOUR" -eq "08" ] && [ "$CURRENT_MIN" -ge "25" ] && [ "$CURRENT_MIN" -le "45" ]; then
+            echo "--> [02:00 PM IST] Midday Active Shift: Firing Midday Mass Apply & Resume Reply Scanner..."
+            curl -s -X POST https://career-command-center-vqpj.onrender.com/api/run/run_all || true
+          
           else
-            echo "--> Server pinged and kept active. Daily routine triggers at 09:00 AM IST."
+            echo "--> Active 10-hour shift verified. Server awake and background scheduler active."
           fi

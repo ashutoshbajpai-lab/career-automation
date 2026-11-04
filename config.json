@@ -9,6 +9,13 @@
     "Product Manager"
   ],
   "location": "India",
+  "operating_hours": {
+    "enabled": true,
+    "active_hours_per_day": 10,
+    "start_time_ist": "09:00",
+    "end_time_ist": "19:00",
+    "timezone": "Asia/Kolkata (IST)"
+  },
   "dry_run": false,
   "test_mode": false,
   "limits": {

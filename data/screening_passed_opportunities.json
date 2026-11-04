@@ -1,0 +1,67 @@
+[
+  {
+    "company": "Naukri Campus Jobs",
+    "sender": "Naukri Campus Jobs",
+    "subject": "Fast track your job search with this",
+    "snippet": "Firstnaukri INTERVIEW PREPARATION AI powered personalised answers for commonly asked interview questions 1 What are your short terms and lon",
+    "category": "General Career",
+    "status_badge": "bg-slate-100 text-slate-700",
+    "next_action": "Review update in email",
+    "date": "",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox",
+    "is_screening_passed": true,
+    "passed_stage": "Interview Scheduled"
+  },
+  {
+    "company": "ISRO (ICRB)",
+    "sender": "noreplyicrb",
+    "subject": "Admit Card Download and Examination Details for ICRB-Recruitment.",
+    "snippet": "Dear Candidate, This is in reference to your application for the advertised vacancy for recruitment to the post of Scientist/Engineer SC(Mec",
+    "category": "Exam / Assessment / Next Steps",
+    "status_badge": "bg-purple-100 text-purple-700 font-bold",
+    "next_action": "CBT Exam Date & City Intimated / Admit Card Available",
+    "date": "",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox",
+    "is_screening_passed": true,
+    "passed_stage": "Admit Card Released"
+  },
+  {
+    "company": "ISRO (ICRB)",
+    "sender": "ICRB",
+    "subject": "Admit Card Download and Examination Details for ICRB-Recruitment.",
+    "snippet": "Dear Candidate, This is in reference to your application for the advertised vacancy for recruitment to the post of Scientist/Engineer SC(Mec",
+    "category": "Exam / Assessment / Next Steps",
+    "status_badge": "bg-purple-100 text-purple-700 font-bold",
+    "next_action": "CBT Exam Date & City Intimated / Admit Card Available",
+    "date": "",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox",
+    "is_screening_passed": true,
+    "passed_stage": "Admit Card Released"
+  },
+  {
+    "company": "ISRO (ICRB)",
+    "sender": "ICRB",
+    "subject": "City and Date Intimation for the CBT of ICRB-(ISRO).",
+    "snippet": "Dear Candidate, This is with reference to your application for the respective post against the advertised vacancies published by ISRO CENTRA",
+    "category": "Exam / Assessment / Next Steps",
+    "status_badge": "bg-purple-100 text-purple-700 font-bold",
+    "next_action": "CBT Exam Date & City Intimated / Admit Card Available",
+    "date": "",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox",
+    "is_screening_passed": true,
+    "passed_stage": "CBT Exam Date & City Intimated"
+  },
+  {
+    "company": "Airports Authority of India (AAI)",
+    "sender": "IBPSRE",
+    "subject": "Intimation for Online Exam -Airports Authority of India-Recruitment of Managers and Junior Executives in Various Disciplines",
+    "snippet": "Dear Candidate, Name: ASHUTOSH BAJPAI Registration No.: 742225945 Roll no.: 1941002075 Post: - JUNIOR EXECUTIVE (OPERATIONS) Venue: ION DIGI",
+    "category": "Exam / Assessment / Next Steps",
+    "status_badge": "bg-purple-100 text-purple-700 font-bold",
+    "next_action": "Online Exam Intimation (Roll: 1941002075)",
+    "date": "",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox",
+    "is_screening_passed": true,
+    "passed_stage": "Online Exam Scheduled"
+  }
+]

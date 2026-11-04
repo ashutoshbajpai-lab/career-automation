@@ -1,0 +1,9 @@
+# Ignore local browser cache & heavy profile binaries
+chrome_profile/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Keep session cookies and resume so Render is authenticated
+!data/session_cookies.json
+!data/resumes/

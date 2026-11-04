@@ -1,0 +1,75 @@
+{
+  "target_roles": [
+    "Analyst",
+    "Data Analyst",
+    "Business Analyst",
+    "Product Analyst",
+    "Associate Product Manager",
+    "APM",
+    "Product Manager"
+  ],
+  "location": "India",
+  "dry_run": false,
+  "test_mode": false,
+  "limits": {
+    "max_feed_posts_per_run": 50,
+    "max_jobs_evaluated_per_run": 50,
+    "max_easy_applies_per_run": 25,
+    "max_easy_applies_per_day": 150,
+    "action_delay_min_seconds": 1.5,
+    "action_delay_max_seconds": 3.5
+  },
+  "candidate_profile": {
+    "name": "Ashutosh Bajpai",
+    "phone": "8081377486",
+    "email": "ashutosh.bajpai.028works@gmail.com",
+    "years_of_experience": "1",
+    "resume_path": "/Users/ashutoshbajpai/.gemini/antigravity/scratch/linkedin_automation/data/resumes/Ashutosh_Bajpai_Resume.pdf",
+    "authorized_to_work": true,
+    "require_sponsorship": false
+  },
+  "naukri": {
+    "enabled": true,
+    "target_roles": [
+      "Analyst",
+      "Data Analyst",
+      "Business Analyst",
+      "Associate Product Manager",
+      "Product Manager"
+    ],
+    "location": "Delhi NCR, Bengaluru, Mumbai, Remote",
+    "daily_apply_target": 60,
+    "daily_boost_enabled": true
+  },
+  "external_ats_domains": [
+    "myworkdayjobs.com",
+    "oraclecloud.com",
+    "taleo.net",
+    "greenhouse.io",
+    "lever.co",
+    "icims.com",
+    "brassring.com",
+    "smartrecruiters.com",
+    "successfactors.com",
+    "jobvite.com",
+    "bamboohr.com"
+  ],
+  "lead_keywords": [
+    "hiring",
+    "opening",
+    "job",
+    "opportunity",
+    "referral",
+    "analyst",
+    "product manager",
+    "apm",
+    "looking for",
+    "apply"
+  ],
+  "templates": {
+    "referral_template": "Hi {first_name}, hope you are doing well! I noticed you work at {company}. As a fellow engineer from {college} exploring {target_role} roles, I would appreciate connecting to learn about your journey and see if you would be open to a referral at {company}!",
+    "alumni_template": "Hi {first_name}, noticed you also went to {college}! As a fellow alumnus exploring {target_role} roles at {company}, I would love to connect and learn from your journey.",
+    "recruiter_template": "Hi {first_name}, I came across your work at {company}. As an aspiring {target_role} with analytics and product experience, I would love to connect and learn about opportunities.",
+    "resume_dispatch_template": "Hi {first_name}, thank you so much for offering to refer me! I have attached my updated resume. Really appreciate your time and support!"
+  }
+}

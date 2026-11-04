@@ -1,0 +1,22 @@
+[
+  {
+    "timestamp": "2026-11-04 21:48:44",
+    "name": "Jaishree",
+    "company": "PEC Alumni",
+    "headline": "1st-Degree Connection",
+    "profile_url": "https://www.linkedin.com/in/jaishree-2a970933b/",
+    "action_type": "1st-Degree Direct Message",
+    "status": "Delivered",
+    "message_text": "Hi Jaishree, hope you are doing well! Great to connect with a fellow PECian here. I saw your recent update regarding your experience at Britannia \u2014 really inspiring work! As I'm actively exploring product management and analytics opportunities, I'd love to stay in touch and exchange notes sometime."
+  },
+  {
+    "timestamp": "2026-11-04 21:49:06",
+    "name": "Ojasvi Pandey",
+    "company": "IIT Jodhpur",
+    "headline": "Target Profile",
+    "profile_url": "https://www.linkedin.com/in/ojasvi-pandey-9ab32120a/",
+    "action_type": "1st-Degree Direct Message",
+    "status": "Delivered",
+    "message_text": "Hi Ojasvi, hope you're having a great week! Saw your update regarding the Dream11 product challenge at Inter IIT Tech Meet \u2014 fantastic accomplishment! As someone actively working in analytics and product roles, I'd love to stay connected and exchange thoughts on product strategy."
+  }
+]

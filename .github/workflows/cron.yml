@@ -1,0 +1,31 @@
+name: 24/7 Cloud Automation & Keepalive Cron
+
+on:
+  schedule:
+    # Runs every 10 minutes (Keeps Render free tier awake 24/7/365 without sleeping)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI anytime
+
+jobs:
+  keepalive_and_scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Meraki Command Center Keepalive
+        run: |
+          echo "Pinging Cloud Server Keepalive..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://career-command-center-vqpj.onrender.com/api/stats || echo "000")
+          echo "Keepalive ping response code: $STATUS"
+
+      - name: Daily Morning Autopilot Trigger (03:30 UTC / 09:00 AM IST)
+        run: |
+          CURRENT_HOUR=$(date -u +"%H")
+          CURRENT_MIN=$(date -u +"%M")
+          echo "UTC Hour: $CURRENT_HOUR, UTC Min: $CURRENT_MIN"
+          
+          # Between 03:30 and 03:45 UTC corresponds to 09:00 - 09:15 AM Indian Standard Time (IST)
+          if [ "$CURRENT_HOUR" -eq "03" ] && [ "$CURRENT_MIN" -ge "25" ] && [ "$CURRENT_MIN" -le "45" ]; then
+            echo "--> It is 09:00 AM IST! Triggering Full Autonomous Career Engine..."
+            curl -s -X POST https://career-command-center-vqpj.onrender.com/api/run/run_all || true
+          else
+            echo "--> Server pinged and kept active. Daily routine triggers at 09:00 AM IST."
+          fi

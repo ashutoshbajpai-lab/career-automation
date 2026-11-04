@@ -4,6 +4,5 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# Keep session cookies and resume so Render is authenticated
-!data/session_cookies.json
-!data/resumes/
+# Session cookies kept private (passed via Render environment variable)
+data/session_cookies.json

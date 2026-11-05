@@ -7,6 +7,14 @@ if [ -n "$SESSION_COOKIES_BASE64" ]; then
     echo "$SESSION_COOKIES_BASE64" | base64 -d > data/session_cookies.json
 fi
 
+# Start Xvfb virtual frame buffer for full headed stealth execution on Linux
+if command -v Xvfb >/dev/null 2>&1; then
+    echo "--> Starting Xvfb virtual display on :99..."
+    Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -ac +extension GLX +render -noreset &
+    export DISPLAY=:99
+    sleep 2
+fi
+
 echo "--> Initializing Cloud Session Cookies..."
 python3 import_session.py || true
 

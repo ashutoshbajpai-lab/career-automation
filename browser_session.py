@@ -7,6 +7,7 @@ Supports:
 
 import os
 import time
+import json
 import random
 import logging
 from playwright.sync_api import sync_playwright
@@ -78,12 +79,18 @@ class BrowserManager:
                     pass
 
         chrome_executable = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        is_headless = os.environ.get("HEADLESS", "").lower() in ("true", "1") or not os.path.exists("/Applications")
+        headless_env = os.environ.get("HEADLESS", "").lower()
+        if headless_env in ("false", "0"):
+            is_headless = False
+        elif headless_env in ("true", "1"):
+            is_headless = True
+        else:
+            is_headless = False if (os.environ.get("DISPLAY") or os.path.exists("/Applications")) else True
 
         launch_kwargs = {
             "user_data_dir": PROFILE_DIR,
-            "headless": is_headless,  # Automatic headless on Linux Cloud VM
-            "viewport": None if not is_headless else {"width": 1440, "height": 900},
+            "headless": is_headless,
+            "viewport": {"width": 1440, "height": 900},
             "ignore_default_args": ["--enable-automation"],
             "args": [
                 "--disable-blink-features=AutomationControlled",
@@ -92,12 +99,28 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--window-size=1440,900"
             ]
         }
         if os.path.exists(chrome_executable):
             launch_kwargs["executable_path"] = chrome_executable
 
+        logger.info(f"Launching Playwright context (headless={is_headless}, DISPLAY={os.environ.get('DISPLAY', 'None')})...")
         self.context = self.playwright.chromium.launch_persistent_context(**launch_kwargs)
+
+        # Automatically inject session cookies if present
+        session_file = os.path.join(BASE_DIR, "data", "session_cookies.json")
+        if os.path.exists(session_file):
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    sdata = json.load(f)
+                cookies = sdata.get("cookies", [])
+                if cookies:
+                    self.context.add_cookies(cookies)
+                    logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")
+            except Exception as e:
+                logger.warning(f"Failed to auto-inject cookies: {e}")
+
         page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
         # Keep popups alive during Google OAuth SSO flow

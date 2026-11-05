@@ -48,7 +48,13 @@ class NaukriAutomator:
             
             human_delay(4.0, 6.0)
 
-            # Check if login is required
+            # Check if login is required or blocked
+            if "access denied" in page.title().lower():
+                logger.error(f"Naukri Bot Challenge detected: '{page.title()}' at {page.url}")
+                record = {"status": "Access Denied (Bot Challenge)", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                self._save_boost_log(record)
+                return record
+
             if "login" in page.url or "nlogin" in page.url:
                 logger.warning("Naukri login required. Current URL: " + page.url)
                 record = {"status": "Login Required", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -223,13 +229,33 @@ class NaukriAutomator:
                     logger.warning(f"Error loading Naukri URL: {e}")
                     continue
 
+                if "access denied" in page.title().lower():
+                    logger.error(f"Naukri bot protection blocked access (Title: '{page.title()}').")
+                    continue
+
                 for page_num in range(1, 4):  # Check up to 3 pages per role
                     if len(applied_list) >= daily_target:
                         break
 
-                    # Extract job tuples
+                    # Wait for job cards or listings to render in DOM
+                    try:
+                        page.wait_for_selector('.cust-job-tuple, .srp-jobtuple-wrapper, article.jobTuple, div[data-job-id], a[href*="/job-listings"]', timeout=10000)
+                    except Exception:
+                        pass
+
+                    # Extract job tuples with resilient fallback
                     jobs_data = page.evaluate('''() => {
-                        const tuples = Array.from(document.querySelectorAll('.cust-job-tuple, .srp-jobtuple-wrapper, article.jobTuple, div[data-job-id]'));
+                        let tuples = Array.from(document.querySelectorAll('.cust-job-tuple, .srp-jobtuple-wrapper, article.jobTuple, div[data-job-id]'));
+                        if (tuples.length === 0) {
+                            const anchors = Array.from(document.querySelectorAll('a[href*="/job-listings"]')).filter(a => a.innerText.trim().length > 3);
+                            return anchors.map(a => ({
+                                title: a.innerText.trim(),
+                                url: a.href,
+                                company: 'Company',
+                                experience: '',
+                                location: 'India'
+                            }));
+                        }
                         return tuples.map(t => {
                             const titleEl = t.querySelector('a.title, .job-title, a[href*="/job-listings"]');
                             const compEl = t.querySelector('a.comp-name, .company-name, .subTitle');

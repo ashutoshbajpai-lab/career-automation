@@ -3,9 +3,13 @@ FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
-ENV HEADLESS=true
+ENV HEADLESS=false
+ENV DISPLAY=:99
 ENV PORT=5055
 ENV HOST=0.0.0.0
+
+# Install Xvfb virtual framebuffer and X11 utilities to support headed browser evasion
+RUN apt-get update && apt-get install -y xvfb xauth && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY requirements.txt .
@@ -23,3 +27,4 @@ RUN chmod +x start.sh
 EXPOSE 5055
 
 CMD ["./start.sh"]
+

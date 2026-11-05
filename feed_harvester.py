@@ -114,13 +114,13 @@ class FeedHarvester:
                         seen_card_hashes.add(h)
                         raw_items.append(card)
             except Exception as e:
-                logger.warning(f"Pass {scroll_i} evaluation notice: {e}")
+                self._log(f"⚠️ Pass {scroll_i} note: {e}")
 
             if len(raw_items) >= target_posts:
                 self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
                 break
 
-            if scroll_i % 10 == 0:
+            if scroll_i % 5 == 0:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")
 
             human_delay(0.9, 1.3)

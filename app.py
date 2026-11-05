@@ -70,7 +70,11 @@ def after_request(response):
     return response
 
 
+LAST_MEM_CHECK = 0
+CACHED_MEM_MB = 42.0
+
 def get_stats():
+    global LAST_MEM_CHECK, CACHED_MEM_MB
     today = datetime.now().strftime("%Y-%m-%d")
     naukri_count = 0
     linkedin_count = 0
@@ -139,16 +143,15 @@ def get_stats():
 
     now_ist = datetime.now(IST)
     is_active_shift = 9 <= now_ist.hour < 19
-    mem_mb = 0
-    try:
-        import psutil
-        p = psutil.Process(os.getpid())
-        mem_mb = round(p.memory_info().rss / 1024 / 1024, 1)
-        for child in p.children(recursive=True):
-            mem_mb += round(child.memory_info().rss / 1024 / 1024, 1)
-        mem_mb = round(mem_mb, 1)
-    except Exception:
-        pass
+    now_ts = time.time()
+    if now_ts - LAST_MEM_CHECK > 20:
+        try:
+            import psutil
+            p = psutil.Process(os.getpid())
+            CACHED_MEM_MB = round(p.memory_info().rss / 1024 / 1024, 1)
+            LAST_MEM_CHECK = now_ts
+        except Exception:
+            pass
 
     return {
         "naukri_today": naukri_count,
@@ -163,7 +166,7 @@ def get_stats():
         "current_task": CURRENT_TASK,
         "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
         "ist_time": now_ist.strftime("%H:%M:%S IST"),
-        "ram_mb": mem_mb
+        "ram_mb": CACHED_MEM_MB
     }
 
 

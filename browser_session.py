@@ -46,7 +46,7 @@ class BrowserManager:
         self.context = None
         self.is_cdp = False
 
-    def get_context_and_page(self):
+    def get_context_and_page(self, force_headless: bool = None):
         self.playwright = sync_playwright().start()
 
         # Method 1: Try connecting to Chrome running with --remote-debugging-port=9222
@@ -79,18 +79,22 @@ class BrowserManager:
                     pass
 
         chrome_executable = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        headless_env = os.environ.get("HEADLESS", "").lower()
-        if headless_env in ("false", "0"):
-            is_headless = False
-        elif headless_env in ("true", "1"):
-            is_headless = True
+        
+        if force_headless is not None:
+            is_headless = force_headless
         else:
-            is_headless = False if (os.environ.get("DISPLAY") or os.path.exists("/Applications")) else True
+            headless_env = os.environ.get("HEADLESS", "").lower()
+            if headless_env in ("true", "1"):
+                is_headless = True
+            elif headless_env in ("false", "0"):
+                is_headless = False
+            else:
+                is_headless = True  # Lean, high-performance default for LinkedIn & cloud
 
         launch_kwargs = {
             "user_data_dir": PROFILE_DIR,
             "headless": is_headless,
-            "viewport": {"width": 1440, "height": 900},
+            "viewport": {"width": 1280, "height": 800},
             "ignore_default_args": ["--enable-automation"],
             "args": [
                 "--disable-blink-features=AutomationControlled",
@@ -99,7 +103,7 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--window-size=1440,900",
+                "--window-size=1280,800",
                 "--js-flags=--max-old-space-size=128",
                 "--renderer-process-limit=2",
                 "--disable-extensions",

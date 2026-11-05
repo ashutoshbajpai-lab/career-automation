@@ -38,7 +38,8 @@ class NaukriAutomator:
         and saves it, triggering Naukri's system to display 'Updated: Today'.
         """
         logger.info("Starting Naukri Daily Profile Recency Boost...")
-        context, page = self.browser_mgr.get_context_and_page()
+        headed_mode = False if os.environ.get("DISPLAY") else None
+        context, page = self.browser_mgr.get_context_and_page(force_headless=headed_mode)
 
         try:
             try:
@@ -212,7 +213,8 @@ class NaukriAutomator:
             target_roles = ["Analyst", "Data Analyst", "Business Analyst", "Associate Product Manager", "Product Manager"]
 
         logger.info(f"Starting Naukri High-Volume Auto-Apply (Target: {daily_target} applications)...")
-        context, page = self.browser_mgr.get_context_and_page()
+        headed_mode = False if os.environ.get("DISPLAY") else None
+        context, page = self.browser_mgr.get_context_and_page(force_headless=headed_mode)
 
         applied_list = []
         manual_list = []

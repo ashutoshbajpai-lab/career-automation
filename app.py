@@ -2213,7 +2213,7 @@ def run_task(task_type):
                 try:
                     mgr = BrowserManager()
                     try:
-                        context, page = mgr.get_context_and_page()
+                        context, page = mgr.get_context_and_page(force_headless=True)
                         config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
                         state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                         harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
@@ -2231,7 +2231,7 @@ def run_task(task_type):
                 try:
                     mgr = BrowserManager()
                     try:
-                        context, page = mgr.get_context_and_page()
+                        context, page = mgr.get_context_and_page(force_headless=True)
                         config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
                             "target_roles": ["Analyst", "Associate Product Manager"],
                             "location": "India",
@@ -2298,7 +2298,7 @@ def run_task(task_type):
                 add_log("🚀 Starting LinkedIn Easy Apply & Job Scanner...")
                 mgr = BrowserManager()
                 try:
-                    context, page = mgr.get_context_and_page()
+                    context, page = mgr.get_context_and_page(force_headless=True)
                     config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
                         "target_roles": ["Analyst", "Associate Product Manager", "Product Manager"],
                         "location": "India",
@@ -2321,7 +2321,7 @@ def run_task(task_type):
                 add_log("🚀 Starting LinkedIn Feed Harvester...")
                 mgr = BrowserManager()
                 try:
-                    context, page = mgr.get_context_and_page()
+                    context, page = mgr.get_context_and_page(force_headless=True)
                     config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
                     state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                     harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)

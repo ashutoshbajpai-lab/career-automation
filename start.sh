@@ -9,8 +9,8 @@ fi
 
 # Start Xvfb virtual frame buffer for full headed stealth execution on Linux
 if command -v Xvfb >/dev/null 2>&1; then
-    echo "--> Starting Xvfb virtual display on :99..."
-    Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -ac +extension GLX +render -noreset &
+    echo "--> Starting lightweight Xvfb virtual display on :99..."
+    Xvfb :99 -screen 0 1024x768x16 -nolisten tcp -ac +extension GLX +render -noreset &
     export DISPLAY=:99
     sleep 2
 fi

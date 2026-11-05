@@ -7,6 +7,7 @@ recruitment_dispatcher.py - Classifies scraped recruitment posts into:
 import os
 import json
 import logging
+import re
 from urllib.parse import quote
 from datetime import datetime
 

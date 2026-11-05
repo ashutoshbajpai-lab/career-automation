@@ -85,6 +85,13 @@ class FeedHarvester:
         raw_items = []
         max_scroll_passes = 28
 
+        # Focus feed container
+        try:
+            self.page.mouse.move(640, 400)
+            self.page.mouse.click(640, 400)
+        except Exception:
+            pass
+
         for scroll_i in range(1, max_scroll_passes + 1):
             # 1. Expand all '...see more' buttons currently visible in the DOM
             try:
@@ -99,10 +106,10 @@ class FeedHarvester:
             # 2. Extract visible cards at current scroll position
             try:
                 batch = self.page.evaluate('''() => {
-                    const items = document.querySelectorAll('div.feed-shared-update-v2, div[data-urn*="activity"], div.occludable-update, [data-lazy-mount-id], [role="listitem"]');
+                    const items = document.querySelectorAll('div.feed-shared-update-v2, div[data-urn*="activity"], div.occludable-update, [data-lazy-mount-id]');
                     const results = [];
                     items.forEach(el => {
-                        const text = el.innerText || '';
+                        const text = (el.innerText || '').trim();
                         if (text.length > 50) {
                             const links = Array.from(el.querySelectorAll('a')).map(a => ({
                                 href: a.href,
@@ -117,7 +124,7 @@ class FeedHarvester:
                     return results;
                 }''')
                 for card in batch:
-                    h = abs(hash(card["text"][:100]))
+                    h = abs(hash(card["text"][:120]))
                     if h not in seen_card_hashes:
                         seen_card_hashes.add(h)
                         raw_items.append(card)
@@ -128,20 +135,21 @@ class FeedHarvester:
                 self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
                 break
 
-            if scroll_i % 4 == 0:
+            if scroll_i % 3 == 0:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Extracted {len(raw_items)} distinct posts so far...")
 
-            # 3. Authentic input-driven scrolling to trigger LinkedIn infinite scroll loader
+            # 3. Dual scroll: absolute pixel advance + OS keyboard event to trigger infinite scroll
+            scroll_y = scroll_i * 1300
             try:
-                self.page.mouse.wheel(0, 1100)
+                self.page.evaluate(f"window.scrollTo(0, {scroll_y});")
                 self.page.keyboard.press("PageDown")
-                human_delay(1.0, 1.6)
+                self.page.evaluate('''() => {
+                    const btn = document.querySelector("button.scaffold-finite-scroll__load-button");
+                    if (btn) btn.click();
+                }''')
+                human_delay(1.0, 1.5)
             except Exception:
-                try:
-                    self.page.evaluate("window.scrollBy(0, 1000);")
-                    human_delay(1.0, 1.5)
-                except Exception:
-                    pass
+                pass
 
         self._log(f"Analyzed feed: Successfully extracted {len(raw_items)} distinct post cards. Filtering for opportunities...")
 

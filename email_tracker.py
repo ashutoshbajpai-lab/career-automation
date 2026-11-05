@@ -31,9 +31,13 @@ class EmailTracker:
 
     def scan_full_inbox(self) -> list:
         logger.info("Opening Gmail Inbox to analyze all subject lines...")
-        context, page = self.browser_mgr.get_context_and_page()
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
 
         try:
+            try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
             page.goto("https://mail.google.com/mail/u/0/#inbox", wait_until="domcontentloaded")
             human_delay(5.0, 6.5)
 

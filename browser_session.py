@@ -103,9 +103,11 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--disable-accelerated-2d-canvas",
+                "--no-zygote",
                 "--window-size=1280,800",
-                "--js-flags=--max-old-space-size=128",
-                "--renderer-process-limit=2",
+                "--js-flags=--max-old-space-size=96",
+                "--renderer-process-limit=1",
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--disable-component-update",
@@ -184,3 +186,9 @@ class BrowserManager:
                 self.playwright.stop()
         except Exception as e:
             logger.debug(f"Error during browser close: {e}")
+        finally:
+            self.browser = None
+            self.context = None
+            self.playwright = None
+            import gc
+            gc.collect()

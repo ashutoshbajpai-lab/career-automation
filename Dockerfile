@@ -7,6 +7,7 @@ ENV HEADLESS=false
 ENV DISPLAY=:99
 ENV PORT=5055
 ENV HOST=0.0.0.0
+ENV TZ=Asia/Kolkata
 
 # Install Xvfb virtual framebuffer and X11 utilities to support headed browser evasion
 RUN apt-get update && apt-get install -y xvfb xauth && rm -rf /var/lib/apt/lists/*

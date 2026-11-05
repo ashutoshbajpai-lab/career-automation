@@ -70,136 +70,140 @@ class CompanyNetworkExpander:
         """
         cfg = self.load_config()
         target_roles = cfg.get("target_roles", ["Analyst", "Product Manager", "Associate Product Manager"])
-        
-        context, page = self.browser_mgr.get_context_and_page()
+
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
         try:
-            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
-        except Exception:
-            pass
-        if not self.browser_mgr.ensure_logged_in(page):
-            logger.error("LinkedIn login required for company network expansion.")
-            return {"status": "Failed", "reason": "Not logged in"}
-
-        companies = DEFAULT_MUMBAI_STARTUPS[:max_companies]
-        total_connections_sent = 0
-        total_jobs_found = []
-        sent_records = []
-
-        logger.info(f"Starting Regional & Startup Network Expansion for {len(companies)} companies...")
-
-        for comp in companies:
-            comp_name = comp["name"]
-            comp_slug = comp["slug"]
-            logger.info(f"\n--- Processing Company: {comp_name} ({comp_slug}) ---")
-
-            # Step 1: Search Company's Jobs Section for Aligned Roles
             try:
-                jobs_url = f"https://www.linkedin.com/company/{comp_slug}/jobs/"
-                page.goto(jobs_url, wait_until="domcontentloaded")
-                human_delay(3.0, 4.0)
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
 
-                found_jobs = page.evaluate('''() => {
-                    const jobs = [];
-                    document.querySelectorAll("li.org-jobs-job-search-results-list__list-item, div.job-card-container, div.artdeco-entity-lockup").forEach(el => {
-                        const titleEl = el.querySelector("a[href*='/jobs/view/'], .job-card-list__title, h3");
-                        const linkEl = el.querySelector("a[href*='/jobs/view/']");
-                        if (titleEl && titleEl.innerText) {
-                            const title = titleEl.innerText.trim();
-                            const link = linkEl ? linkEl.href.split('?')[0] : '';
-                            jobs.push({ title: title, url: link });
-                        }
-                    });
-                    return jobs;
-                }''')
+            if not self.browser_mgr.ensure_logged_in(page):
+                logger.error("LinkedIn login required for company network expansion.")
+                return {"status": "Failed", "reason": "Not logged in"}
 
-                aligned_jobs = []
-                for j in found_jobs:
-                    title_lower = j.get("title", "").lower()
-                    if any(r.lower() in title_lower for r in target_roles) or "analyst" in title_lower or "product" in title_lower:
-                        j["company"] = comp_name
-                        j["discovered_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        aligned_jobs.append(j)
+            companies = DEFAULT_MUMBAI_STARTUPS[:max_companies]
+            total_connections_sent = 0
+            total_jobs_found = []
+            sent_records = []
 
-                if aligned_jobs:
-                    logger.info(f"Found {len(aligned_jobs)} aligned jobs at {comp_name}!")
-                    total_jobs_found.extend(aligned_jobs)
-                    self._save_discovered_jobs(aligned_jobs)
-                else:
-                    logger.info(f"No active Analyst/PM postings listed on {comp_name} job board today.")
+            logger.info(f"Starting Regional & Startup Network Expansion for {len(companies)} companies...")
 
-            except Exception as e:
-                logger.warning(f"Error checking jobs for {comp_name}: {e}")
+            for comp in companies:
+                comp_name = comp["name"]
+                comp_slug = comp["slug"]
+                logger.info(f"\n--- Processing Company: {comp_name} ({comp_slug}) ---")
 
-            # Step 2: Go to Company's People Section & Send Connection Requests ONLY (NO NOTE)
-            try:
-                # Priority search: Product, Analytics, Recruiters, and PEC Alumni
-                people_url = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords=Product%20Manager"
-                page.goto(people_url, wait_until="domcontentloaded")
-                human_delay(3.5, 4.5)
+                # Step 1: Search Company's Jobs Section for Aligned Roles
+                try:
+                    jobs_url = f"https://www.linkedin.com/company/{comp_slug}/jobs/"
+                    page.goto(jobs_url, wait_until="domcontentloaded")
+                    human_delay(3.0, 4.0)
 
-                people = self.referral_engine._extract_people_from_page(page, comp_name)
-                logger.info(f"Extracted {len(people)} aligned people from {comp_name} people directory.")
-
-                company_connects = 0
-                for person in people:
-                    if company_connects >= max_connects_per_company:
-                        break
-
-                    name = person.get("name", "Unknown")
-                    profile_url = person.get("profile_url", "")
-                    headline = person.get("headline", "")
-
-                    if not profile_url or self._already_sent(profile_url):
-                        continue
-
-                    try:
-                        logger.info(f"Navigating to {name} ({comp_name}) to send connection request (No note)...")
-                        page.goto(profile_url, wait_until="domcontentloaded")
-                        human_delay(3.0, 4.0)
-
-                        # Clean connection request with NO note
-                        sent = self.referral_engine._send_connection_request(page, note_text="")
-                        if sent:
-                            company_connects += 1
-                            total_connections_sent += 1
-                            rec = {
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "name": name,
-                                "company": comp_name,
-                                "headline": headline,
-                                "profile_url": profile_url,
-                                "action_type": "Connection Request (No Note)",
-                                "status": "Sent"
+                    found_jobs = page.evaluate('''() => {
+                        const jobs = [];
+                        document.querySelectorAll("li.org-jobs-job-search-results-list__list-item, div.job-card-container, div.artdeco-entity-lockup").forEach(el => {
+                            const titleEl = el.querySelector("a[href*='/jobs/view/'], .job-card-list__title, h3");
+                            const linkEl = el.querySelector("a[href*='/jobs/view/']");
+                            if (titleEl && titleEl.innerText) {
+                                const title = titleEl.innerText.trim();
+                                const link = linkEl ? linkEl.href.split('?')[0] : '';
+                                jobs.push({ title: title, url: link });
                             }
-                            self._log_connection(rec)
-                            self.referral_engine._record_outreach({
-                                "timestamp": rec["timestamp"],
-                                "name": name,
-                                "company": comp_name,
-                                "headline": headline,
-                                "profile_url": profile_url,
-                                "action_type": "Connection Request (No Note)",
-                                "status": "Sent",
-                                "message_text": "[Connection Request Only - No Message Attached]"
-                            })
-                            sent_records.append(rec)
-                            logger.info(f"SUCCESS: Connection request sent to {name} ({comp_name})!")
-                            human_delay(3.0, 5.0)
+                        });
+                        return jobs;
+                    }''')
 
-                    except Exception as inner_e:
-                        logger.warning(f"Could not connect with {name}: {inner_e}")
+                    aligned_jobs = []
+                    for j in found_jobs:
+                        title_lower = j.get("title", "").lower()
+                        if any(r.lower() in title_lower for r in target_roles) or "analyst" in title_lower or "product" in title_lower:
+                            j["company"] = comp_name
+                            j["discovered_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            aligned_jobs.append(j)
 
-            except Exception as e:
-                logger.warning(f"Error accessing people section for {comp_name}: {e}")
+                    if aligned_jobs:
+                        logger.info(f"Found {len(aligned_jobs)} aligned jobs at {comp_name}!")
+                        total_jobs_found.extend(aligned_jobs)
+                        self._save_discovered_jobs(aligned_jobs)
+                    else:
+                        logger.info(f"No active Analyst/PM postings listed on {comp_name} job board today.")
 
-        logger.info(f"\nFINISHED: Sent {total_connections_sent} connection requests across {len(companies)} companies.")
-        return {
-            "status": "Success",
-            "companies_processed": len(companies),
-            "connections_sent": total_connections_sent,
-            "jobs_found": len(total_jobs_found),
-            "records": sent_records
-        }
+                except Exception as e:
+                    logger.warning(f"Error checking jobs for {comp_name}: {e}")
+
+                # Step 2: Go to Company's People Section & Send Connection Requests ONLY (NO NOTE)
+                try:
+                    # Priority search: Product, Analytics, Recruiters, and PEC Alumni
+                    people_url = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords=Product%20Manager"
+                    page.goto(people_url, wait_until="domcontentloaded")
+                    human_delay(3.5, 4.5)
+
+                    people = self.referral_engine._extract_people_from_page(page, comp_name)
+                    logger.info(f"Extracted {len(people)} aligned people from {comp_name} people directory.")
+
+                    company_connects = 0
+                    for person in people:
+                        if company_connects >= max_connects_per_company:
+                            break
+
+                        name = person.get("name", "Unknown")
+                        profile_url = person.get("profile_url", "")
+                        headline = person.get("headline", "")
+
+                        if not profile_url or self._already_sent(profile_url):
+                            continue
+
+                        try:
+                            logger.info(f"Navigating to {name} ({comp_name}) to send connection request (No note)...")
+                            page.goto(profile_url, wait_until="domcontentloaded")
+                            human_delay(3.0, 4.0)
+
+                            # Clean connection request with NO note
+                            sent = self.referral_engine._send_connection_request(page, note_text="")
+                            if sent:
+                                company_connects += 1
+                                total_connections_sent += 1
+                                rec = {
+                                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                    "name": name,
+                                    "company": comp_name,
+                                    "headline": headline,
+                                    "profile_url": profile_url,
+                                    "action_type": "Connection Request (No Note)",
+                                    "status": "Sent"
+                                }
+                                self._log_connection(rec)
+                                self.referral_engine._record_outreach({
+                                    "timestamp": rec["timestamp"],
+                                    "name": name,
+                                    "company": comp_name,
+                                    "headline": headline,
+                                    "profile_url": profile_url,
+                                    "action_type": "Connection Request (No Note)",
+                                    "status": "Sent",
+                                    "message_text": "[Connection Request Only - No Message Attached]"
+                                })
+                                sent_records.append(rec)
+                                logger.info(f"SUCCESS: Connection request sent to {name} ({comp_name})!")
+                                human_delay(3.0, 5.0)
+
+                        except Exception as inner_e:
+                            logger.warning(f"Could not connect with {name}: {inner_e}")
+
+                except Exception as e:
+                    logger.warning(f"Error accessing people section for {comp_name}: {e}")
+
+            logger.info(f"\nFINISHED: Sent {total_connections_sent} connection requests across {len(companies)} companies.")
+            return {
+                "status": "Success",
+                "companies_processed": len(companies),
+                "connections_sent": total_connections_sent,
+                "jobs_found": len(total_jobs_found),
+                "records": sent_records
+            }
+        finally:
+            self.browser_mgr.close()
 
     def _already_sent(self, profile_url: str) -> bool:
         if not os.path.exists(CONNECTIONS_LOG):

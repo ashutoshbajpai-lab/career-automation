@@ -60,53 +60,61 @@ class ReferralEngine:
         1. Searches for PEC / Punjab Engineering College alumni first (Tier 1)
         2. Searches for target roles (Analyst, Product Manager, Recruiter) in India (Tier 2/3)
         """
-        context, page = self.browser_mgr.get_context_and_page()
-        if not self.browser_mgr.ensure_logged_in(page):
-            return []
-
-        company_slug = company.strip().lower().replace(" ", "-").replace(".", "")
-        results = []
-        seen_urls = set()
-
-        # Step A: Alumni Search on Company People Page
-        if prioritize_alumni:
-            alumni_url = f"https://www.linkedin.com/company/{company_slug}/people/?keywords={quote_plus(USER_COLLEGE)}"
-            logger.info(f"Checking {company} for {USER_COLLEGE} alumni...")
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
+        try:
             try:
-                page.goto(alumni_url, wait_until="domcontentloaded")
-                human_delay(3.5, 4.5)
-                alumni_found = self._extract_people_from_page(page, company, is_alumni=True)
-                for p in alumni_found:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
+
+            if not self.browser_mgr.ensure_logged_in(page):
+                return []
+
+            company_slug = company.strip().lower().replace(" ", "-").replace(".", "")
+            results = []
+            seen_urls = set()
+
+            # Step A: Alumni Search on Company People Page
+            if prioritize_alumni:
+                alumni_url = f"https://www.linkedin.com/company/{company_slug}/people/?keywords={quote_plus(USER_COLLEGE)}"
+                logger.info(f"Checking {company} for {USER_COLLEGE} alumni...")
+                try:
+                    page.goto(alumni_url, wait_until="domcontentloaded")
+                    human_delay(3.5, 4.5)
+                    alumni_found = self._extract_people_from_page(page, company, is_alumni=True)
+                    for p in alumni_found:
+                        if p["profile_url"] not in seen_urls:
+                            seen_urls.add(p["profile_url"])
+                            p["tier"] = "Tier 1: PEC Alumni"
+                            p["priority"] = 1
+                            results.append(p)
+                    logger.info(f"Found {len(alumni_found)} PEC alumni at {company}!")
+                except Exception as e:
+                    logger.debug(f"Alumni search error: {e}")
+
+            # Step B: Role & Recruiter Search
+            role_query = f"{company} {role} India"
+            search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(role_query)}"
+            logger.info(f"Searching {role} at {company} (India)...")
+            try:
+                page.goto(search_url, wait_until="domcontentloaded")
+                human_delay(3.0, 4.5)
+                role_people = self._extract_search_results(page, company, role)
+                for p in role_people:
                     if p["profile_url"] not in seen_urls:
                         seen_urls.add(p["profile_url"])
-                        p["tier"] = "Tier 1: PEC Alumni"
-                        p["priority"] = 1
+                        is_recruiter = any(k in p["headline"].lower() for k in ["recruiter", "talent", "hiring", "ta", "hr"])
+                        p["tier"] = "Tier 3: Recruiter" if is_recruiter else "Tier 2: Role Match"
+                        p["priority"] = 3 if is_recruiter else 2
                         results.append(p)
-                logger.info(f"Found {len(alumni_found)} PEC alumni at {company}!")
             except Exception as e:
-                logger.debug(f"Alumni search error: {e}")
+                logger.debug(f"Role search error: {e}")
 
-        # Step B: Role & Recruiter Search
-        role_query = f"{company} {role} India"
-        search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(role_query)}"
-        logger.info(f"Searching {role} at {company} (India)...")
-        try:
-            page.goto(search_url, wait_until="domcontentloaded")
-            human_delay(3.0, 4.5)
-            role_people = self._extract_search_results(page, company, role)
-            for p in role_people:
-                if p["profile_url"] not in seen_urls:
-                    seen_urls.add(p["profile_url"])
-                    is_recruiter = any(k in p["headline"].lower() for k in ["recruiter", "talent", "hiring", "ta", "hr"])
-                    p["tier"] = "Tier 3: Recruiter" if is_recruiter else "Tier 2: Role Match"
-                    p["priority"] = 3 if is_recruiter else 2
-                    results.append(p)
-        except Exception as e:
-            logger.debug(f"Role search error: {e}")
-
-        # Sort by priority (Tier 1 Alumni first, then Role Matches, then Recruiters)
-        results.sort(key=lambda x: x.get("priority", 2))
-        return results[:limit]
+            # Sort by priority (Tier 1 Alumni first, then Role Matches, then Recruiters)
+            results.sort(key=lambda x: x.get("priority", 2))
+            return results[:limit]
+        finally:
+            self.browser_mgr.close()
 
     def _extract_people_from_page(self, page, company: str, is_alumni: bool = False) -> list:
         people = page.evaluate('''() => {
@@ -178,96 +186,112 @@ class ReferralEngine:
         return cleaned
 
     def get_existing_connections(self, limit: int = 20) -> list:
-        context, page = self.browser_mgr.get_context_and_page()
-        if not self.browser_mgr.ensure_logged_in(page):
-            return []
-
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
         try:
-            page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", wait_until="domcontentloaded")
-            human_delay(3.0, 4.5)
-        except Exception:
-            return []
+            try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
 
-        connections = page.evaluate('''() => {
-            const results = [];
-            const seen = new Set();
-            document.querySelectorAll("li, div").forEach(c => {
-                const link = c.querySelector("a[href*='/in/']");
-                if (link && link.innerText) {
-                    const rawName = link.innerText.trim().split('\\n')[0];
-                    const href = link.href.split('?')[0];
-                    if (!seen.has(href) && rawName.length > 2 && rawName.length < 50 && !rawName.toLowerCase().includes('view') && !rawName.toLowerCase().includes('connect')) {
-                        seen.add(href);
-                        const p = c.querySelector('p, span.mn-connection-card__occupation, span');
-                        results.push({
-                            name: rawName,
-                            profile_url: href,
-                            headline: p ? p.innerText.trim() : 'Existing Connection',
-                            degree: '1st',
-                            is_connection: true,
-                            tier: '1st Degree Connection'
-                        });
-                    }
-                }
-            });
-            return results;
-        }''')
-
-        return connections[:limit]
-
-    def send_outreach_batch(self, people: list, connect_template: str = "", message_template: str = "", alumni_template: str = "", sender_name: str = "Ashutosh Bajpai", target_role: str = "Analyst / APM") -> list:
-        context, page = self.browser_mgr.get_context_and_page()
-        if not self.browser_mgr.ensure_logged_in(page):
-            return []
-
-        saved_tmpls = get_templates()
-        if not message_template:
-            message_template = saved_tmpls.get("referral_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
-        if not alumni_template:
-            alumni_template = saved_tmpls.get("alumni_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
-        if not connect_template:
-            connect_template = saved_tmpls.get("recruiter_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
-
-        results = []
-        for person in people:
-            name = person.get("name", "Unknown")
-            profile_url = person.get("profile_url", "")
-            is_1st = person.get("is_connection", False) or person.get("degree") == "1st"
-            is_alumni = person.get("is_alumni", False) or "Alumni" in person.get("tier", "")
+            if not self.browser_mgr.ensure_logged_in(page):
+                return []
 
             try:
-                page.goto(profile_url, wait_until="domcontentloaded")
+                page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", wait_until="domcontentloaded")
                 human_delay(3.0, 4.5)
+            except Exception:
+                return []
 
-                if is_1st:
-                    msg_text = self._format_msg(message_template, person, sender_name, target_role)
-                    sent = self._send_direct_message(page, msg_text)
-                    action = "Direct Message"
-                else:
-                    template_to_use = alumni_template if (is_alumni and alumni_template) else connect_template
-                    note_text = self._format_msg(template_to_use, person, sender_name, target_role)[:300]
-                    sent = self._send_connection_request(page, note_text)
-                    action = "Alumni Connection Note" if is_alumni else "Connection Request"
-                    msg_text = note_text
+            connections = page.evaluate('''() => {
+                const results = [];
+                const seen = new Set();
+                document.querySelectorAll("li, div").forEach(c => {
+                    const link = c.querySelector("a[href*='/in/']");
+                    if (link && link.innerText) {
+                        const rawName = link.innerText.trim().split('\\n')[0];
+                        const href = link.href.split('?')[0];
+                        if (!seen.has(href) && rawName.length > 2 && rawName.length < 50 && !rawName.toLowerCase().includes('view') && !rawName.toLowerCase().includes('connect')) {
+                            seen.add(href);
+                            const p = c.querySelector('p, span.mn-connection-card__occupation, span');
+                            results.push({
+                                name: rawName,
+                                profile_url: href,
+                                headline: p ? p.innerText.trim() : 'Existing Connection',
+                                degree: '1st',
+                                is_connection: true,
+                                tier: '1st Degree Connection'
+                            });
+                        }
+                    }
+                });
+                return results;
+            }''')
 
-                record = {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "name": name,
-                    "company": person.get("company", "N/A"),
-                    "headline": person.get("headline", ""),
-                    "profile_url": profile_url,
-                    "action_type": action,
-                    "status": "Delivered" if sent else "Failed/Sent",
-                    "message_text": msg_text
-                }
-                self._record_outreach(record)
-                results.append(record)
-                human_delay(3.5, 5.5)
+            return connections[:limit]
+        finally:
+            self.browser_mgr.close()
 
-            except Exception as e:
-                results.append({"name": name, "status": f"Error: {e}"})
+    def send_outreach_batch(self, people: list, connect_template: str = "", message_template: str = "", alumni_template: str = "", sender_name: str = "Ashutosh Bajpai", target_role: str = "Analyst / APM") -> list:
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
+        try:
+            try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
 
-        return results
+            if not self.browser_mgr.ensure_logged_in(page):
+                return []
+
+            saved_tmpls = get_templates()
+            if not message_template:
+                message_template = saved_tmpls.get("referral_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
+            if not alumni_template:
+                alumni_template = saved_tmpls.get("alumni_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
+            if not connect_template:
+                connect_template = saved_tmpls.get("recruiter_template", DEFAULT_FIXED_REFERRAL_TEMPLATE)
+
+            results = []
+            for person in people:
+                name = person.get("name", "Unknown")
+                profile_url = person.get("profile_url", "")
+                is_1st = person.get("is_connection", False) or person.get("degree") == "1st"
+                is_alumni = person.get("is_alumni", False) or "Alumni" in person.get("tier", "")
+
+                try:
+                    page.goto(profile_url, wait_until="domcontentloaded")
+                    human_delay(3.0, 4.5)
+
+                    if is_1st:
+                        msg_text = self._format_msg(message_template, person, sender_name, target_role)
+                        sent = self._send_direct_message(page, msg_text)
+                        action = "Direct Message"
+                    else:
+                        template_to_use = alumni_template if (is_alumni and alumni_template) else connect_template
+                        note_text = self._format_msg(template_to_use, person, sender_name, target_role)[:300]
+                        sent = self._send_connection_request(page, note_text)
+                        action = "Alumni Connection Note" if is_alumni else "Connection Request"
+                        msg_text = note_text
+
+                    record = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "name": name,
+                        "company": person.get("company", "N/A"),
+                        "headline": person.get("headline", ""),
+                        "profile_url": profile_url,
+                        "action_type": action,
+                        "status": "Delivered" if sent else "Failed/Sent",
+                        "message_text": msg_text
+                    }
+                    self._record_outreach(record)
+                    results.append(record)
+                    human_delay(3.5, 5.5)
+
+                except Exception as e:
+                    results.append({"name": name, "status": f"Error: {e}"})
+
+            return results
+        finally:
+            self.browser_mgr.close()
 
     def _format_msg(self, template: str, person: dict, sender_name: str, target_role: str) -> str:
         first = person.get("name", "there").split()[0]
@@ -407,7 +431,11 @@ class ReferralEngine:
             logger.warning(f"Master resume file not found or invalid: {resume_path}")
             return [{"status": "Skipped", "reason": "No valid master resume configured"}]
 
-        context, page = self.browser_mgr.get_context_and_page()
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
+        try:
+            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+        except Exception:
+            pass
         if not self.browser_mgr.ensure_logged_in(page):
             return [{"status": "Failed", "reason": "LinkedIn login failed"}]
 

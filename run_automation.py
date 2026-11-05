@@ -68,7 +68,11 @@ def main():
     job_results = {"easy_applied": [], "manual_queued": []}
 
     try:
-        context, page = browser_mgr.get_context_and_page()
+        context, page = browser_mgr.get_context_and_page(force_headless=True)
+        try:
+            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+        except Exception:
+            pass
 
         # Step 0: Ensure User is Authenticated
         is_logged_in = browser_mgr.ensure_logged_in(page, timeout_sec=240)

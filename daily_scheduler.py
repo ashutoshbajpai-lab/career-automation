@@ -92,7 +92,8 @@ def job_harvest_leads():
         return
     logger.info("SCHEDULED TASK: Harvesting LinkedIn feed for vacancy forms and recruiter leads...")
     try:
-        os.system(f"python3 {os.path.join(BASE_DIR, 'run_automation.py')}")
+        from run_automation import main as run_linkedin_auto
+        run_linkedin_auto()
         res = sync_leads()
         msg = f"Feed harvest finished: {len(res.get('forms', []))} forms, {len(res.get('emails', []))} recruiter leads synced."
         logger.info(msg)

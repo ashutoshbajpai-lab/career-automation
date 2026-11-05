@@ -18,8 +18,5 @@ fi
 echo "--> Initializing Cloud Session Cookies..."
 python3 import_session.py || true
 
-echo "--> Starting Autonomous Background Scheduler (24/7)..."
-python3 daily_scheduler.py &
-
-echo "--> Launching Meraki Career Command Center on Port ${PORT:-5055}..."
+echo "--> Launching Meraki Career Command Center with Integrated 10h Shift Scheduler on Port ${PORT:-5055}..."
 python3 app.py

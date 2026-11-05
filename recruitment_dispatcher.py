@@ -125,10 +125,11 @@ def sync_leads():
 
         if not post_url:
             clean_auth = re.sub(r"\s*\(.*?\)", "", author).strip()
+            clean_prev = re.sub(r"[^\w\s]", "", preview[:40]).strip()
             if clean_auth and clean_auth != "Hiring Lead":
-                q = f'"{clean_auth}" {re.sub(r"[^\w\s]", "", preview[:40]).strip()}'
+                q = f'"{clean_auth}" {clean_prev}'
             else:
-                q = re.sub(r"[^\w\s]", "", preview[:50]).strip() or "hiring"
+                q = clean_prev or "hiring"
             post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(q)}"
 
         # 1. Process Form Links & External Application Links

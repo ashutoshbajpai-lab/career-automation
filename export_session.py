@@ -47,10 +47,27 @@ def main():
         "cookies": cookies
     }
 
+    payload_str = json.dumps(payload, indent=2)
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
+        f.write(payload_str)
 
     logger.info(f"Successfully exported session to: {OUTPUT_FILE}")
+
+    # Auto-sync to Render
+    import base64
+    import requests
+    b64_val = base64.b64encode(payload_str.encode("utf-8")).decode("utf-8")
+    url = "https://api.render.com/v1/services/srv-dblnjm6c6qcc73bpkv70/env-vars/SESSION_COOKIES_BASE64"
+    headers = {
+        "Authorization": "Bearer rnd_V7GNSF2DNymcat6NZAAz8ONRbGkh",
+        "Content-Type": "application/json"
+    }
+    try:
+        res = requests.put(url, headers=headers, json={"value": b64_val}, timeout=15)
+        if res.status_code in (200, 201):
+            logger.info("✅ SUCCESS: Fresh cookies uploaded to Render cloud! Service will auto-deploy with verified login.")
+    except Exception as e:
+        logger.warning(f"Could not push to Render: {e}")
     print("\n" + "=" * 65)
     print(f"SUCCESS: Session bundle saved to {OUTPUT_FILE}")
     print("This file contains your verified login sessions for cloud deployment.")

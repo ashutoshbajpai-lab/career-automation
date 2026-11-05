@@ -1440,11 +1440,10 @@ MERAKI_UI_HTML = """
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
             <td class="p-3 font-bold text-slate-900">
-              <div>${f.poster}</div>
-              <a href="${f.post_url}" target="_blank" class="text-[11px] text-teal-700 hover:text-teal-900 font-semibold inline-flex items-center gap-1 mt-0.5" title="View Source Post on LinkedIn">
-                <i class="fa-brands fa-linkedin text-xs text-blue-600"></i>
-                <span>Source Post</span>
-                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+              <div class="text-sm font-bold text-slate-900">${f.poster}</div>
+              <a href="${f.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open original post on LinkedIn">
+                <i class="fa-brands fa-linkedin text-blue-600"></i>
+                <span>Source Post ↗</span>
               </a>
             </td>
             <td class="p-3 text-slate-600 max-w-md truncate" title="${f.context}">${f.context}</td>
@@ -1453,15 +1452,15 @@ MERAKI_UI_HTML = """
             </td>
             <td class="p-3 text-right whitespace-nowrap">
               <div class="inline-flex items-center gap-1.5 justify-end">
+                <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post where this form was shared"
+                   class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
+                  <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
+                  <span>View Source Post ↗</span>
+                </a>
                 <a href="${f.form_url}" target="_blank"
                    class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
                   <span>Open &amp; Fill Form</span>
                   <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                </a>
-                <a href="${f.post_url}" target="_blank" title="Open source LinkedIn post in new tab"
-                   class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition">
-                  <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
-                  <span>Post</span>
                 </a>
                 <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
                         class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
@@ -1492,11 +1491,10 @@ MERAKI_UI_HTML = """
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${e.timestamp}</td>
             <td class="p-3 font-bold text-slate-900">
-              <div>${e.recipient_name}</div>
-              <a href="${e.post_url}" target="_blank" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 mt-0.5" title="View Source Post on LinkedIn">
-                <i class="fa-brands fa-linkedin text-xs text-blue-600"></i>
-                <span>Source Post</span>
-                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+              <div class="text-sm font-bold text-slate-900">${e.recipient_name}</div>
+              <a href="${e.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open source LinkedIn post in new tab">
+                <i class="fa-brands fa-linkedin text-blue-600"></i>
+                <span>Source Post ↗</span>
               </a>
             </td>
             <td class="p-3 font-semibold text-indigo-600">${e.email}</td>
@@ -1506,15 +1504,15 @@ MERAKI_UI_HTML = """
             </td>
             <td class="p-3 text-right whitespace-nowrap">
               <div class="inline-flex items-center gap-1.5 justify-end">
+                <a href="${e.post_url}" target="_blank" title="View the original LinkedIn post where this recruiter email was shared"
+                   class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
+                  <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
+                  <span>View Source Post ↗</span>
+                </a>
                 <a href="${e.gmail_web_link}" target="_blank"
                    class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20">
                   <i class="fa-solid fa-envelope"></i>
                   <span>Send via Gmail</span>
-                </a>
-                <a href="${e.post_url}" target="_blank" title="Open source LinkedIn post in new tab"
-                   class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition">
-                  <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
-                  <span>Post</span>
                 </a>
                 <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
                   <i class="fa-solid fa-paper-plane"></i>

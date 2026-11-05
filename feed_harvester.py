@@ -94,28 +94,70 @@ class FeedHarvester:
             try:
                 new_cards = self.page.evaluate('''() => {
                     // Click see more to expand truncated recruiter emails and links
-                    document.querySelectorAll('button.feed-shared-inline-show-more-text, button[aria-label*="see more"]').forEach(b => {
+                    document.querySelectorAll('button.feed-shared-inline-show-more-text, button[aria-label*="see more"], .feed-shared-see-more-less-toggle').forEach(b => {
                         try { b.click(); } catch(e) {}
                     });
-                    const mounts = Array.from(document.querySelectorAll('[data-lazy-mount-id]:not([data-harvested]), div.feed-shared-update-v2:not([data-harvested]), div[data-urn*="activity"]:not([data-harvested])'));
+                    
+                    // Match top-level post containers
+                    const potentialElements = Array.from(document.querySelectorAll(
+                        'div.feed-shared-update-v2, div[data-urn*="urn:li:"], div[data-id*="urn:li:"], div[data-view-name="feed-full-update"], [data-lazy-mount-id]'
+                    ));
+                    
+                    const processedCards = new Set();
                     const results = [];
-                    mounts.forEach(el => {
-                        el.setAttribute('data-harvested', '1');
-                        const rawText = (el.textContent || '').trim();
-                        if (rawText.length > 80) {
-                            const authorEl = el.querySelector(".update-components-actor__name span[aria-hidden='true'], .update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
+                    
+                    potentialElements.forEach(el => {
+                        const card = el.closest('div.feed-shared-update-v2, div[data-urn*="urn:li:"], div[data-id*="urn:li:"], div[data-view-name="feed-full-update"]') || el;
+                        if (!card || processedCards.has(card) || card.hasAttribute('data-harvested')) return;
+                        processedCards.add(card);
+                        card.setAttribute('data-harvested', '1');
+
+                        const rawText = (card.innerText || card.textContent || '').trim();
+                        if (rawText.length > 60) {
+                            // Extract author name
+                            const authorEl = card.querySelector(
+                                ".update-components-actor__name span[aria-hidden='true'], " +
+                                ".update-components-actor__name, " +
+                                ".feed-shared-actor__name span[aria-hidden='true'], " +
+                                ".feed-shared-actor__name, " +
+                                "span.update-components-actor__title span[aria-hidden='true'], " +
+                                "a.update-components-actor__meta-link"
+                            );
                             let authorName = authorEl ? (authorEl.textContent || '').trim() : '';
                             if (!authorName) {
-                                const lines = rawText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('Feed post'));
+                                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('Feed post'));
                                 if (lines.length) authorName = lines[0].split('•')[0].trim();
                             }
 
-                            const urn = el.getAttribute('data-urn') || el.closest('[data-urn]')?.getAttribute('data-urn') || el.querySelector('[data-urn]')?.getAttribute('data-urn') || '';
-                            let postPermalink = (urn && urn.includes('urn:li:')) ? `https://www.linkedin.com/feed/update/${urn}/` : '';
+                            // Extract post URN and direct permalink
+                            let urn = card.getAttribute('data-urn') || 
+                                      card.getAttribute('data-id') || 
+                                      card.getAttribute('data-chameleon-urn') || '';
 
-                            const links = Array.from(el.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
+                            if (!urn) {
+                                const urnEl = card.querySelector('[data-urn*="urn:li:"], [data-id*="urn:li:"]');
+                                if (urnEl) urn = urnEl.getAttribute('data-urn') || urnEl.getAttribute('data-id') || '';
+                            }
+
+                            let postPermalink = '';
+                            if (urn && urn.includes('urn:li:')) {
+                                postPermalink = `https://www.linkedin.com/feed/update/${urn}/`;
+                            }
+
+                            const links = Array.from(card.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
                             if (!postPermalink) {
-                                const foundLink = links.find(h => h.includes('/feed/update/urn:li:activity:') || h.includes('/posts/'));
+                                const timestampLink = card.querySelector('a[href*="/feed/update/urn:li:"], a.update-components-actor__sub-description-link, a[href*="/posts/"]');
+                                if (timestampLink && timestampLink.href) {
+                                    const m = timestampLink.href.match(/urn:li:(?:activity|ugcPost|share):[0-9]+/);
+                                    if (m) {
+                                        postPermalink = `https://www.linkedin.com/feed/update/${m[0]}/`;
+                                    } else {
+                                        postPermalink = timestampLink.href.split('?')[0];
+                                    }
+                                }
+                            }
+                            if (!postPermalink) {
+                                const foundLink = links.find(h => h.includes('/feed/update/urn:li:') || h.includes('/posts/'));
                                 if (foundLink) postPermalink = foundLink.split('?')[0];
                             }
 
@@ -211,14 +253,39 @@ class FeedHarvester:
 
             # Extract Author from element metadata or text header
             author = item.get("author", "").strip()
-            if not author:
+            if not author or author.lower() in ["linkedin member", "linkedin", "member"]:
+                # Pattern: "...likes this<Author> •" or "...reposted this<Author> •" or "...commented<Author> •"
+                m = re.search(r"(?:likes this|commented|reposted this|finds this insightful|follows this page)\s*([A-Za-z0-9\s\.\,\-]+?)\s*(?:•|\d+[hdwmy]|Follow|Promoted|$)", text, re.IGNORECASE)
+                if m:
+                    cand = m.group(1).strip()
+                    cand = re.sub(r"^(?:and \d+ other connections? like this|reposted this)\s*", "", cand, flags=re.IGNORECASE).strip()
+                    if len(cand) > 2 and len(cand) < 45:
+                        author = cand
+
+            if not author or author.lower() in ["linkedin member", "linkedin", "member"]:
                 lines = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().startswith("Feed post") and not "likes this" in line]
-                author = lines[0] if lines else "LinkedIn Member"
+                if lines:
+                    cand = lines[0].split("•")[0].strip()
+                    cand = re.sub(r"\d+[\d,]*\s*(?:followers|connections?|Promoted)?.*$", "", cand).strip()
+                    author = cand if len(cand) > 2 and len(cand) < 45 else "Hiring Lead"
+                else:
+                    author = "Hiring Lead"
 
             # Construct verified fallback post URL if direct link wasn't captured
             if not post_url:
-                search_q = f"{author} {emails[0] if emails else (form_links[0] if form_links else text[:50])}".replace("LinkedIn Member", "").strip()
-                post_url = f"https://www.linkedin.com/search/results/content/?keywords={urllib.parse.quote(search_q or 'hiring')}"
+                clean_auth = re.sub(r"\s*\(.*?\)", "", author).strip()
+                if clean_auth and clean_auth != "Hiring Lead":
+                    if emails:
+                        search_kw = f'"{clean_auth}" "{emails[0]}"'
+                    else:
+                        snip = re.sub(r"[^\w\s]", "", text[:40]).strip()
+                        search_kw = f'"{clean_auth}" {snip}'
+                elif emails:
+                    search_kw = f'"{emails[0]}"'
+                else:
+                    snip = re.sub(r"[^\w\s]", "", text[:50]).strip()
+                    search_kw = snip or "hiring"
+                post_url = f"https://www.linkedin.com/search/results/content/?keywords={urllib.parse.quote(search_kw)}"
 
             has_keyword = any(kw in text_lower for kw in lead_keywords)
             has_actionable = bool(emails or form_links or external_links or any(w in text_lower for w in ["dm", "comment", "email", "cv", "resume", "apply"]))

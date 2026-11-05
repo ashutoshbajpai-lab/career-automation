@@ -104,13 +104,30 @@ def sync_leads():
             recruiter_leads = []
 
     for post in feed_leads:
-        author = post.get("author", "LinkedIn Poster")
+        raw_author = post.get("author", "").strip()
         preview = post.get("preview", "")
         timestamp = post.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         post_url = post.get("post_url", "").strip()
+
+        # Clean author name from preview if needed
+        author = raw_author
+        if not author or any(k in author.lower() for k in ["member", "feed post", "hiring lead", "linkedin poster"]):
+            m = re.search(r"(?:likes this|commented|reposted this|finds this insightful|follows this page)\s*([A-Za-z0-9\s\.\,\-]+?)\s*(?:•|\d+[hdwmy]|Follow|Promoted|$)", preview, re.IGNORECASE)
+            if m:
+                cand = m.group(1).strip()
+                cand = re.sub(r"^(?:and \d+ other connections? like this|reposted this)\s*", "", cand, flags=re.IGNORECASE).strip()
+                if len(cand) > 2 and len(cand) < 45:
+                    author = cand
+        if not author or any(k in author.lower() for k in ["member", "feed post", "hiring lead", "linkedin poster"]):
+            author = "Hiring Lead"
+
         if not post_url:
-            search_context = f"{author if 'member' not in author.lower() else ''} {preview[:60]}".strip()
-            post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(search_context or 'hiring')}"
+            clean_auth = re.sub(r"\s*\(.*?\)", "", author).strip()
+            if clean_auth and clean_auth != "Hiring Lead":
+                q = f'"{clean_auth}" {re.sub(r"[^\w\s]", "", preview[:40]).strip()}'
+            else:
+                q = re.sub(r"[^\w\s]", "", preview[:50]).strip() or "hiring"
+            post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(q)}"
 
         # 1. Process Form Links & External Application Links
         forms_str = post.get("form_links", "")
@@ -151,11 +168,46 @@ def sync_leads():
                 if email not in seen_emails and email not in dismissed_emails:
                     seen_emails.add(email)
 
-                    # Professional salutation: Avoid 'Hi LinkedIn'
-                    if author and not any(kw in author.lower() for kw in ["linkedin", "member", "feed post"]):
-                        salutation = author.split()[0].capitalize()
-                    else:
+                    lead_author = author
+                    if lead_author in ["Hiring Lead", "LinkedIn Member"] or not lead_author:
+                        domain = email.split("@")[1].split(".")[0].lower()
+                        brand_map = {
+                            "qualcomm": "Qualcomm Careers",
+                            "uflexltd": "Uflex Limited HR",
+                            "blackbuck": "BlackBuck Talent Team",
+                            "gmrinfo": "GMR Group Careers",
+                            "mastersunion": "Palak Pruthi (Masters’ Union)",
+                            "pinnacleu": "Shanaya Vasisht (PinnacleU)",
+                            "freshworks": "Freshworks Recruiting",
+                            "adobe": "Adobe Talent Team",
+                            "tcs": "TCS Recruitment Desk",
+                            "delhivery": "Delhivery Careers",
+                            "phonepe": "PhonePe Talent Team",
+                            "hcltech": "HCLTech Hiring Team",
+                            "deshaw": "D. E. Shaw Careers",
+                            "zohocorp": "Zoho Talent Acquisition",
+                            "mphasis": "Mphasis Talent Team",
+                            "hexaware": "Hexaware Careers",
+                            "browserstack": "BrowserStack Hiring",
+                            "nttdata": "NTT DATA Careers",
+                            "inmobi": "InMobi Recruiting Team",
+                            "coforge": "Coforge Talent Team",
+                            "maruti": "Maruti Suzuki Recruitment",
+                            "almarinaholding": "Al Marina Holding",
+                            "eatclutch": "Clutch Hiring Team",
+                            "paibytwo": "PaiByTwo Recruitment",
+                            "aavishkaar": "Aavishkaar Capital",
+                            "wakefit": "Wakefit Recruiting",
+                            "algoanalytics": "AlgoAnalytics Hiring"
+                        }
+                        lead_author = brand_map.get(domain, f"{domain.capitalize()} Hiring Team")
+
+                    # Salutation
+                    first_tok = lead_author.split()[0].capitalize()
+                    if any(k in lead_author.lower() for k in ["team", "careers", "group", "desk", "lead", "holding", "services", "consulting"]):
                         salutation = "Hiring Team"
+                    else:
+                        salutation = first_tok
 
                     subject = f"Application for Analyst / Product Role - {CANDIDATE_NAME} ({CANDIDATE_COLLEGE})"
                     body = (
@@ -176,13 +228,18 @@ def sync_leads():
                     gmail_web_link = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(email)}&su={quote(subject)}&body={quote(body)}"
 
                     recruiter_post_url = post_url
-                    if not recruiter_post_url or "keywords=" in recruiter_post_url:
-                        recruiter_post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(email)}"
+                    if not recruiter_post_url or "keywords=" in recruiter_post_url or "hiring" in recruiter_post_url:
+                        clean_auth = re.sub(r"\s*\(.*?\)", "", lead_author).strip()
+                        if clean_auth and not any(k in clean_auth.lower() for k in ["team", "lead", "desk", "careers"]):
+                            q = f'"{clean_auth}" "{email}"'
+                        else:
+                            q = f'"{email}"'
+                        recruiter_post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(q)}"
 
                     recruiter_leads.append({
                         "id": str(abs(hash(email))),
                         "timestamp": timestamp,
-                        "recipient_name": author if "member" not in author.lower() else "Hiring Lead",
+                        "recipient_name": lead_author,
                         "email": email,
                         "subject": subject,
                         "draft_body": body,

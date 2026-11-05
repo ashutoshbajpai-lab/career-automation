@@ -173,7 +173,7 @@ MERAKI_UI_HTML = """
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CareerHub - Meraki Executive Dashboard</title>
+  <title>Careercommand</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -195,7 +195,7 @@ MERAKI_UI_HTML = """
         <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-indigo-500/30">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
-        <span class="font-bold text-lg text-slate-900 tracking-tight">meraki<span class="text-indigo-600">ui</span></span>
+        <span class="font-bold text-lg text-slate-900 tracking-tight">Career<span class="text-indigo-600">command</span></span>
       </div>
 
       <!-- Navigation Links -->
@@ -2434,5 +2434,5 @@ sched_thread.start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5055))
     host = os.environ.get("HOST", "0.0.0.0")
-    logger.info(f"Starting Meraki Career Command Center on http://{host}:{port}")
+    logger.info(f"Starting Careercommand on http://{host}:{port}")
     app.run(host=host, port=port, debug=False)

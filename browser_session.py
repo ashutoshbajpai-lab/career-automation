@@ -116,12 +116,13 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--disable-accelerated-2d-canvas",
-                "--window-size=1280,800",
+                "--disable-software-rasterizer",
+                "--renderer-process-limit=1",
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--disable-component-update",
-                "--disable-sync"
+                "--disable-sync",
+                "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process"
             ]
         }
         if os.path.exists(chrome_executable):

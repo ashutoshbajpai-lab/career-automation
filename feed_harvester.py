@@ -52,7 +52,7 @@ class FeedHarvester:
     def run(self) -> list:
         self._log("Configuring lightweight page route (blocking media & heavy fonts to optimize RAM)...")
         try:
-            self.page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            self.page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] or any(t in route.request.url for t in ["doubleclick", "google-analytics", "googletagmanager", "snap.licdn.com", "demdex", "adservice"]) else route.continue_())
         except Exception:
             pass
 

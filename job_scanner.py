@@ -33,18 +33,27 @@ def extract_real_url(href: str) -> str:
 
 
 class JobScanner:
-    def __init__(self, page, config: dict, state: dict, base_dir: str):
+    def __init__(self, page, config: dict, state: dict, base_dir: str, log_cb=None):
         self.page = page
         self.config = config
         self.state = state
         self.base_dir = base_dir
+        self.log_cb = log_cb
         self.data_dir = os.path.join(base_dir, "data")
         os.makedirs(self.data_dir, exist_ok=True)
         self.manual_csv = os.path.join(self.data_dir, "manual_applications.csv")
         self.applied_csv = os.path.join(self.data_dir, "applied_jobs.csv")
 
+    def _log(self, msg: str):
+        logger.info(msg)
+        if self.log_cb:
+            try:
+                self.log_cb(msg)
+            except Exception:
+                pass
+
     def run(self) -> dict:
-        logger.info("Starting LinkedIn Job Scanner & Direct Application Router...")
+        self._log("Starting LinkedIn Job Scanner & Application Router...")
         target_roles = self.config.get("target_roles", ["Analyst", "Associate Product Manager"])
         location = self.config.get("location", "India")
         limits = self.config.get("limits", {})

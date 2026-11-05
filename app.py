@@ -27,6 +27,8 @@ from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
 from recruitment_dispatcher import sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON
 from company_network_expander import CompanyNetworkExpander
+from feed_harvester import FeedHarvester
+from job_scanner import JobScanner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("MerakiApp")
@@ -342,6 +344,15 @@ MERAKI_UI_HTML = """
                 class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
           <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
           <span>Gmail</span>
+        </button>
+
+        <div id="taskStatusPill" class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="taskStatusText">System Idle</span>
+        </div>
+        <button onclick="resetTaskLock()" title="Reset task lock if hung" class="text-[11px] text-slate-400 hover:text-rose-600 transition px-1.5 py-1 flex items-center gap-1 bg-slate-100 hover:bg-rose-50 rounded-lg">
+          <i class="fa-solid fa-rotate-left text-slate-500"></i>
+          <span>Reset</span>
         </button>
         
         <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-indigo-500/20 ml-1">
@@ -1184,7 +1195,32 @@ MERAKI_UI_HTML = """
         if (d.naukri_boost?.timestamp) {
           document.getElementById('naukriLastBoostDate').innerText = d.naukri_boost.timestamp;
         }
+
+        const ct = d.current_task;
+        const pill = document.getElementById('taskStatusPill');
+        const pillTxt = document.getElementById('taskStatusText');
+        if (pill && ct) {
+          if (ct.running) {
+            pill.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 shadow-sm";
+            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span><span>Running: ${ct.name} (${ct.started_at || ''})</span>`;
+          } else {
+            pill.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm";
+            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>System Idle</span>`;
+          }
+        }
       } catch (e) {}
+    }
+
+    async function resetTaskLock() {
+      if (!confirm("Reset the current background execution lock back to Idle?")) return;
+      try {
+        const res = await fetch('/api/reset_task', { method: 'POST' });
+        const d = await res.json();
+        alert(d.message || "Lock reset.");
+        pollDashboardData();
+      } catch (e) {
+        alert("Error resetting lock: " + e);
+      }
     }
 
     async function pollLogs() {
@@ -2115,6 +2151,31 @@ def dispatches_route():
     return jsonify({"dispatches": engine.get_dispatches()})
 
 
+def load_json_file(filepath: str, default: dict) -> dict:
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return default
+
+def save_json_file(filepath: str, data: dict):
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+@app.route("/api/reset_task", methods=["POST"])
+def reset_task():
+    global CURRENT_TASK
+    CURRENT_TASK["running"] = False
+    CURRENT_TASK["name"] = "Idle"
+    CURRENT_TASK["started_at"] = None
+    add_log("SYSTEM: Task execution lock forcibly reset to Idle.")
+    return jsonify({"status": "success", "message": "Task reset to Idle."})
+
+
 @app.route("/api/run/<task_type>", methods=["POST"])
 def run_task(task_type):
     if CURRENT_TASK["running"]:
@@ -2147,49 +2208,64 @@ def run_task(task_type):
                 except Exception as e:
                     add_log(f"⚠️ [2/6] Naukri Apply notice: {e}")
 
-                # 3. LinkedIn Job Scanner & Easy Apply
-                add_log("[3/7] Launching LinkedIn Easy Apply & Job Scanner...")
+                # 3. LinkedIn Feed Harvester & Leads Dispatcher
+                add_log("[3/6] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
                 try:
-                    os.system(f"python3 {os.path.join(BASE_DIR, 'run_automation.py')}")
-                    add_log("✅ [3/7] LinkedIn Easy Apply run completed.")
+                    mgr = BrowserManager()
+                    try:
+                        context, page = mgr.get_context_and_page()
+                        config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
+                        state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
+                        harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                        new_leads = harvester.run()
+                        save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                        synced = sync_leads()
+                        add_log(f"✅ [3/6] Feed Harvest completed: {len(new_leads)} new leads found ({len(synced.get('forms', []))} forms, {len(synced.get('emails', []))} recruiter emails).")
+                    finally:
+                        mgr.close()
                 except Exception as e:
-                    add_log(f"⚠️ [3/7] LinkedIn Easy Apply notice: {e}")
+                    add_log(f"⚠️ [3/6] Feed Harvest notice: {e}")
 
-                # 4. LinkedIn Feed Harvester & Leads Dispatcher
-                add_log("[4/7] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
+                # 4. LinkedIn Job Scanner & Easy Apply
+                add_log("[4/6] Launching LinkedIn Easy Apply & Job Scanner...")
                 try:
-                    sync_leads()
-                    add_log("✅ [4/7] Feed Harvest & Leads Dispatch completed.")
+                    mgr = BrowserManager()
+                    try:
+                        context, page = mgr.get_context_and_page()
+                        config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
+                            "target_roles": ["Analyst", "Associate Product Manager"],
+                            "location": "India",
+                            "dry_run": False,
+                            "limits": {"max_jobs_evaluated_per_run": 10, "max_easy_applies_per_run": 2}
+                        })
+                        state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_job_ids": []})
+                        scanner = JobScanner(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                        res = scanner.run()
+                        save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                        add_log(f"✅ [4/6] LinkedIn Easy Apply completed (Applied: {len(res.get('easy_applied', []))}, Queued: {len(res.get('manual_queued', []))}).")
+                    finally:
+                        mgr.close()
                 except Exception as e:
-                    add_log(f"⚠️ [4/7] Feed Harvest notice: {e}")
+                    add_log(f"⚠️ [4/6] LinkedIn Easy Apply notice: {e}")
 
                 # 5. Regional Companies & Startups Network Expander (Mumbai & Startups)
-                add_log("[5/7] Searching Mumbai Companies & Startups (Jobs Search + Connection Requests Only, NO NOTE)...")
+                add_log("[5/6] Searching Mumbai Companies & Startups (Jobs Search + Connection Requests Only, NO NOTE)...")
                 try:
                     expander = CompanyNetworkExpander()
                     res_expand = expander.run_company_expansion(max_companies=3, max_connects_per_company=2)
-                    add_log(f"✅ [5/7] Company Expander complete: Checked {res_expand.get('companies_processed')} companies, found {res_expand.get('jobs_found')} aligned jobs, sent {res_expand.get('connections_sent')} connection requests (No note).")
+                    add_log(f"✅ [5/6] Company Expander complete: Checked {res_expand.get('companies_processed')} companies, found {res_expand.get('jobs_found')} aligned jobs, sent {res_expand.get('connections_sent')} connection requests (No note).")
                 except Exception as e:
-                    add_log(f"⚠️ [5/7] Company Expander notice: {e}")
+                    add_log(f"⚠️ [5/6] Company Expander notice: {e}")
 
                 # 6. Full Gmail Inbox Subject-Line Analysis
-                add_log("[6/7] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
+                add_log("[6/6] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
                 try:
                     tracker = EmailTracker()
                     intel = tracker.scan_full_inbox()
                     passed = tracker.get_screening_passed()
-                    add_log(f"✅ [6/7] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
+                    add_log(f"✅ [6/6] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
                 except Exception as e:
-                    add_log(f"⚠️ [6/7] Gmail notice: {e}")
-
-                # 7. Two-Phase LinkedIn Resume Reply Scanner
-                add_log("[7/7] Scanning LinkedIn Messaging Inbox for Resume Requests ('share resume')...")
-                try:
-                    engine = ReferralEngine()
-                    dispatches = engine.check_inbox_and_dispatch_resume()
-                    add_log(f"✅ [7/7] Two-Phase Resume Reply Scanner finished. Dispatched to {len(dispatches)} connections.")
-                except Exception as e:
-                    add_log(f"⚠️ [7/7] Resume Reply Scanner notice: {e}")
+                    add_log(f"⚠️ [6/6] Gmail notice: {e}")
 
                 add_log("🎉 ALL OPERATIONS FINISHED SUCCESSFULLY! All dashboard metrics, queues, and tables updated.")
 
@@ -2219,15 +2295,45 @@ def run_task(task_type):
                 add_log(f"SUCCESS: Naukri Mass Apply finished! Applied: {res.get('applied_count')}, Manual Queue: {res.get('manual_queued_count')}")
 
             elif task_type == "linkedin_apply":
-                add_log("Starting LinkedIn Easy Apply & Job Scanner...")
-                os.system(f"python3 {os.path.join(BASE_DIR, 'run_automation.py')}")
-                add_log("SUCCESS: LinkedIn Job Scanner finished.")
+                add_log("🚀 Starting LinkedIn Easy Apply & Job Scanner...")
+                mgr = BrowserManager()
+                try:
+                    context, page = mgr.get_context_and_page()
+                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
+                        "target_roles": ["Analyst", "Associate Product Manager", "Product Manager"],
+                        "location": "India",
+                        "dry_run": False,
+                        "limits": {"max_jobs_evaluated_per_run": 10, "max_easy_applies_per_run": 3, "max_easy_applies_per_day": 12}
+                    })
+                    state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_job_ids": []})
+                    scanner = JobScanner(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                    res = scanner.run()
+                    save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                    applied = len(res.get("easy_applied", []))
+                    queued = len(res.get("manual_queued", []))
+                    add_log(f"🎉 SUCCESS: LinkedIn Job Scanner finished! Easy Applied: {applied}, Manual Queued: {queued}.")
+                except Exception as e:
+                    add_log(f"❌ ERROR in LinkedIn Job Scanner: {e}")
+                finally:
+                    mgr.close()
 
             elif task_type == "linkedin_feed":
-                add_log("Starting LinkedIn Feed Harvester...")
-                os.system(f"python3 {os.path.join(BASE_DIR, 'run_automation.py')}")
-                sync_leads()
-                add_log("SUCCESS: LinkedIn Feed Harvester & Leads Sync finished.")
+                add_log("🚀 Starting LinkedIn Feed Harvester...")
+                mgr = BrowserManager()
+                try:
+                    context, page = mgr.get_context_and_page()
+                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
+                    state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
+                    harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                    new_leads = harvester.run()
+                    save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                    synced = sync_leads()
+                    add_log(f"🎉 SUCCESS: LinkedIn Feed Harvester completed! Discovered {len(new_leads)} new hiring leads.")
+                    add_log(f"📊 Live Desks Updated: {len(synced.get('forms', []))} Pending Forms, {len(synced.get('emails', []))} Recruiter Leads.")
+                except Exception as e:
+                    add_log(f"❌ ERROR in LinkedIn Feed Harvester: {e}")
+                finally:
+                    mgr.close()
 
             elif task_type == "scan_gmail":
                 add_log("Starting Full Gmail Inbox Subject-Line Analysis...")

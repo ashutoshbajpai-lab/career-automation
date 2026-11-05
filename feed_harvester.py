@@ -30,29 +30,48 @@ def extract_real_url(href: str) -> str:
 
 
 class FeedHarvester:
-    def __init__(self, page, config: dict, state: dict, base_dir: str):
+    def __init__(self, page, config: dict, state: dict, base_dir: str, log_cb=None):
         self.page = page
         self.config = config
         self.state = state
         self.base_dir = base_dir
+        self.log_cb = log_cb
         self.data_dir = os.path.join(base_dir, "data")
         os.makedirs(self.data_dir, exist_ok=True)
         self.leads_csv = os.path.join(self.data_dir, "feed_leads.csv")
         self.leads_json = os.path.join(self.data_dir, "feed_leads.json")
 
+    def _log(self, msg: str):
+        logger.info(msg)
+        if self.log_cb:
+            try:
+                self.log_cb(msg)
+            except Exception:
+                pass
+
     def run(self) -> list:
-        logger.info("Starting Feed Harvester...")
-        self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
+        self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
+        try:
+            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            self.page.goto("https://www.linkedin.com/feed/")
         human_delay(3.0, 5.0)
 
-        # Smooth scroll to trigger feed hydration
-        smooth_scroll(self.page, total_pixels=800, steps=3)
-        human_delay(2.0, 3.5)
+        # Check if login is required
+        if "login" in self.page.url:
+            self._log("⚠️ LinkedIn login required. Authentication cookies may be expired.")
+            return []
+
+        # Smooth scrolling to trigger feed hydration
+        self._log("Scrolling feed to trigger dynamic hydration of hiring cards...")
+        for step in range(3):
+            smooth_scroll(self.page, total_pixels=800, steps=3)
+            human_delay(1.5, 2.5)
 
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []
         max_posts = self.config.get("limits", {}).get("max_feed_posts_per_run", 25)
-        lead_keywords = [k.lower() for k in self.config.get("lead_keywords", [])]
+        lead_keywords = [k.lower() for k in self.config.get("lead_keywords", ["hiring", "intern", "analyst", "product", "referral", "opening", "job"])]
 
         raw_items = self.page.evaluate('''() => {
             const feed = document.querySelector('[data-testid="mainFeed"], [data-component-type="LazyColumn"], main');
@@ -75,7 +94,7 @@ class FeedHarvester:
             return results;
         }''')
 
-        logger.info(f"Loaded {len(raw_items)} feed cards. Analyzing content...")
+        self._log(f"Analyzed feed: Loaded {len(raw_items)} post cards. Filtering for opportunities...")
 
         for item in raw_items:
             if len(new_leads) >= max_posts:
@@ -132,10 +151,11 @@ class FeedHarvester:
                 }
                 new_leads.append(record)
                 seen_urns.add(hash_id)
-                logger.info(f"[FOUND LEAD] Author: {author} | Emails: {emails} | Forms: {form_links}")
+                self._log(f"🎯 [LEAD DISCOVERED] Author: {author[:25]} | Emails: {', '.join(emails) or 'None'} | Forms: {', '.join(form_links) or 'None'}")
 
         self.state["seen_post_urns"] = list(seen_urns)[-500:]
         self._save_leads(new_leads)
+        self._log(f"Feed Harvester finished: Collected {len(new_leads)} new leads.")
         return new_leads
 
     def _save_leads(self, leads: list):

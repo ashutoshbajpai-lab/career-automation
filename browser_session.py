@@ -99,7 +99,12 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--window-size=1440,900"
+                "--window-size=1440,900",
+                "--js-flags=--max-old-space-size=256",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-component-update",
+                "--disable-sync"
             ]
         }
         if os.path.exists(chrome_executable):

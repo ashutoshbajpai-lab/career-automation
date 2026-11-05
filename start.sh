@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
-set -e
+
+mkdir -p data
 
 if [ -n "$SESSION_COOKIES_BASE64" ]; then
     echo "--> Restoring session cookies from secure environment variable..."
-    mkdir -p data
-    echo "$SESSION_COOKIES_BASE64" | base64 -d > data/session_cookies.json
+    python3 -c '
+import os, base64
+try:
+    val = os.environ.get("SESSION_COOKIES_BASE64", "").strip()
+    if val:
+        decoded = base64.b64decode(val)
+        with open("data/session_cookies.json", "wb") as f:
+            f.write(decoded)
+        print("--> Cookies decoded and saved successfully.")
+except Exception as e:
+    print("--> Cookie restore notice:", e)
+' || true
 fi
 
 # Start Xvfb only if explicitly forced to headed mode

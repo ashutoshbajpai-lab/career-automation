@@ -264,9 +264,12 @@ MERAKI_UI_HTML = """
               <span>PEC Referrals</span>
             </button>
             <button onclick="switchTab('naukri')" id="nav-naukri"
-                    class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <i class="fa-solid fa-bolt w-4 text-amber-500"></i>
-              <span>Naukri Booster</span>
+                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-bolt w-4 text-amber-500"></i>
+                <span>Naukri Autopilot</span>
+              </div>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700" id="sidebarNaukriBadge">0</span>
             </button>
             <button onclick="switchTab('manual')" id="nav-manual"
                     class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
@@ -1003,6 +1006,45 @@ MERAKI_UI_HTML = """
             </div>
           </div>
         </div>
+
+        <!-- Naukri Auto-Applied Opportunities Table -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                <span>Naukri Auto-Applied Roles (0-2 Yrs Experience Target)</span>
+              </h3>
+              <p class="text-xs text-slate-400">Applications submitted autonomously directly through Naukri's application engine.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="triggerAction('naukri_apply')"
+                      class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-2 px-4 rounded-xl transition shadow-sm flex items-center space-x-1.5 cursor-pointer">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Run Mass Apply (0-2 Yrs)</span>
+              </button>
+              <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200" id="naukriAppliedCountBadge">0 Applied</span>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3">Applied At</th>
+                  <th class="p-3">Company</th>
+                  <th class="p-3">Role Title</th>
+                  <th class="p-3">Experience</th>
+                  <th class="p-3">Location</th>
+                  <th class="p-3 text-right">Job Posting</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="naukriAppliedTableBody">
+                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading applied jobs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ========================================== -->
@@ -1522,6 +1564,46 @@ MERAKI_UI_HTML = """
                   <i class="fa-solid fa-trash-can text-xs"></i>
                 </button>
               </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {}
+    }
+
+    // Naukri Auto-Applied Jobs Desk
+    async function loadNaukriApplied() {
+      try {
+        const res = await fetch('/api/naukri_applied');
+        const d = await res.json();
+        const tbody = document.getElementById('naukriAppliedTableBody');
+        const badge = document.getElementById('naukriAppliedCountBadge');
+        const sideBadge = document.getElementById('sidebarNaukriBadge');
+        if (badge) badge.innerText = `${d.count || 0} Applied`;
+        if (sideBadge) sideBadge.innerText = d.count || 0;
+        if (!tbody) return;
+
+        if (!d.jobs || !d.jobs.length) {
+          tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No Naukri applications submitted yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = d.jobs.map(j => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${j.timestamp}</td>
+            <td class="p-3 font-bold text-slate-900">${j.company}</td>
+            <td class="p-3 font-semibold text-indigo-600">${j.title}</td>
+            <td class="p-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                ${j.experience || '0-2 Yrs'}
+              </span>
+            </td>
+            <td class="p-3 text-slate-600">${j.location || 'India'}</td>
+            <td class="p-3 text-right whitespace-nowrap">
+              <a href="${j.job_url}" target="_blank"
+                 class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span>View on Naukri ↗</span>
+              </a>
             </td>
           </tr>
         `).join('');
@@ -2116,6 +2198,7 @@ MERAKI_UI_HTML = """
     setInterval(loadGmailIntel, 6000);
     setInterval(loadPendingForms, 6000);
     setInterval(loadRecruiterLeads, 6000);
+    setInterval(loadNaukriApplied, 6000);
     setInterval(loadOutreachHistory, 5000);
     setInterval(loadDispatches, 8000);
 
@@ -2125,6 +2208,7 @@ MERAKI_UI_HTML = """
     loadGmailIntel();
     loadPendingForms();
     loadRecruiterLeads();
+    loadNaukriApplied();
     loadOutreachHistory();
     loadTemplates();
     loadResumeStatus();
@@ -2200,6 +2284,19 @@ def logs():
 @app.route("/api/manual_queue")
 def manual_queue():
     return jsonify({"queue": load_manual_queue()})
+
+
+@app.route("/api/naukri_applied")
+def api_naukri_applied():
+    applied = []
+    if os.path.exists(NAUKRI_APPLIED_CSV):
+        try:
+            with open(NAUKRI_APPLIED_CSV, "r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    applied.append(row)
+        except Exception as e:
+            logger.error(f"Error reading {NAUKRI_APPLIED_CSV}: {e}")
+    return jsonify({"jobs": list(reversed(applied)), "count": len(applied)})
 
 
 @app.route("/api/outreach_tracker")

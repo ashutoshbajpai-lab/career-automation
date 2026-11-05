@@ -24,6 +24,45 @@ NAUKRI_APPLIED_CSV = os.path.join(DATA_DIR, "naukri_applied_jobs.csv")
 NAUKRI_BOOST_LOG = os.path.join(DATA_DIR, "naukri_boost_log.json")
 MANUAL_CSV = os.path.join(DATA_DIR, "manual_applications.csv")
 
+# Candidate Headline & Summary configured specifically for Naukri Questionnaire & Chatbot
+CANDIDATE_HEADLINE = "Engineering Graduate (PEC) | 13+ Mos Experience: Product (GrayQuest), Strategy & AI Automation (Traya), Analytics (ArabEasy)"
+
+CANDIDATE_SUMMARY = (
+    "A bit about me: I have 13+ months of Internship Experience across business strategy, product management, and data analytics.\n"
+    "I was a Product Intern at GrayQuest Finance (fintech), where I gained basic knowledge of payment structures, IAM mapping and feature prioritization, and used it to take features from sprint to actually going live.\n\n"
+    "Right now I'm a Business Strategy Intern at Traya (D2C), building live AI automations with Claude to solve their manual audit problem. Earlier, I was a Market Research & Data Intern at ArabEasy (EZ Works).\n\n"
+    "Engineering graduate with 13+ months of internship experience across business strategy, product management, and data analytics. "
+    "Built 30+ Power BI dashboards for 10+ clients, wrote 15+ PRDs for a B2B SaaS payments platform, and optimized prompts for a call-QA engine evaluating approximately 1,000+ calls daily."
+)
+
+CANDIDATE_SUMMARY_SHORT = (
+    "Engineering graduate (PEC) with 13+ months internship experience across Business Strategy, Product Management & Data Analytics. "
+    "Product Intern at GrayQuest Finance (15+ PRDs, IAM, payments), Strategy Intern at Traya (Claude AI automations, QA engine for 1000+ calls/day), and ArabEasy (30+ Power BI dashboards)."
+)
+
+
+def is_target_experience(exp_str: str) -> bool:
+    """
+    Filters strictly for roles matching 0-3, 1-2, 0-2, 0-1 years.
+    Rejects roles requiring > 3 years (e.g. 0-5, 3-5, 4-8, 5-10 yrs).
+    """
+    if not exp_str:
+        return True
+    s = exp_str.lower().replace("years", "").replace("yrs", "").replace("yr", "").strip()
+    m = re.findall(r"\d+", s)
+    if not m:
+        return True
+    numbers = [int(n) for n in m]
+    min_exp = numbers[0]
+    max_exp = numbers[1] if len(numbers) > 1 else min_exp
+
+    # Must start at 0, 1, or 2 years, and upper limit must not exceed 3 years
+    if min_exp > 2:
+        return False
+    if max_exp > 3:
+        return False
+    return True
+
 
 class NaukriAutomator:
     def __init__(self, browser_mgr: BrowserManager = None):
@@ -96,9 +135,11 @@ class NaukriAutomator:
                 summary_textarea = page.locator("textarea#summary, textarea.fn-inp-md, textarea[name='summary']").first
                 if summary_textarea.count() > 0:
                     current_val = summary_textarea.input_value().strip()
-                    # Recency hack: toggle trailing period
-                    new_val = current_val[:-1] if current_val.endswith(".") else current_val + "."
-                    logger.info(f"Toggling summary trailing period: {new_val[-30:]}")
+                    if not current_val or len(current_val) < 50:
+                        new_val = CANDIDATE_SUMMARY
+                    else:
+                        new_val = current_val[:-1] if current_val.endswith(".") else current_val + "."
+                    logger.info(f"Updating summary recency: {new_val[-30:]}")
                     summary_textarea.fill(new_val)
                     human_delay(1.0, 2.0)
 
@@ -295,6 +336,12 @@ class NaukriAutomator:
                         if not job_url or job_url in seen_job_urls:
                             continue
 
+                        # Check Experience filter strictly (0-3, 1-2, 0-2 yrs)
+                        exp_range = j.get("experience", "")
+                        if not is_target_experience(exp_range):
+                            logger.info(f"Skipping '{title}' at '{company}' (Req: {exp_range}) - outside 0-3 / 0-2 yrs candidate target.")
+                            continue
+
                         seen_job_urls.add(job_url)
 
                         # Open Job Listing
@@ -404,12 +451,26 @@ class NaukriAutomator:
             logger.info("Naukri screening questionnaire detected! Analyzing questions...")
             human_delay(1.5, 2.5)
 
-            # Check for essay / subjective textareas
-            textareas = drawer.locator("textarea").all()
-            if len(textareas) > 1:
-                return False, "Complex Multi-Question Essay/Subjective Form"
+            # 2. Fill textareas (Cover note, why hire you, about me, profile headline summary)
+            textareas = drawer.locator("textarea, div[contenteditable='true']").all()
+            for ta in textareas:
+                try:
+                    if not ta.is_visible():
+                        continue
+                    curr_val = ta.input_value() if hasattr(ta, "input_value") else ta.inner_text()
+                    if not curr_val.strip():
+                        # Fill with candidate's specific reframed headline summary
+                        max_len = ta.get_attribute("maxlength")
+                        if max_len and int(max_len) < 400:
+                            ta.fill(CANDIDATE_SUMMARY_SHORT[:int(max_len)])
+                        else:
+                            ta.fill(CANDIDATE_SUMMARY)
+                        logger.info("Auto-filled candidate background summary into Naukri questionnaire textarea.")
+                        human_delay(0.5, 1.0)
+                except Exception as e:
+                    logger.debug(f"Note on filling textarea: {e}")
 
-            # Fill text/number inputs
+            # 3. Fill text/number inputs
             inputs = drawer.locator("input[type='text'], input[type='number'], input:not([type])").all()
             for inp in inputs:
                 try:
@@ -421,23 +482,46 @@ class NaukriAutomator:
 
                     # Evaluate context from placeholder, name, or parent label
                     label_text = page.evaluate('''(el) => {
-                        const lbl = el.closest('div.input-field, div.form-group, div')?.innerText || '';
+                        const lbl = el.closest('div.input-field, div.form-group, div, label')?.innerText || '';
                         return (lbl + ' ' + (el.placeholder || '') + ' ' + (el.name || '')).toLowerCase();
                     }''', inp.element_handle())
 
-                    if any(k in label_text for k in ["experience", "years", "yr"]):
+                    if any(k in label_text for k in ["experience", "years", "yr", "internship"]):
                         inp.fill("1")
-                    elif any(k in label_text for k in ["ctc", "salary"]):
-                        inp.fill("800000" if "expected" in label_text else "0")
-                    elif any(k in label_text for k in ["notice", "days"]):
+                    elif any(k in label_text for k in ["expected ctc", "expected salary"]):
+                        inp.fill("800000")
+                    elif any(k in label_text for k in ["current ctc", "current salary", "present ctc"]):
+                        inp.fill("0")
+                    elif any(k in label_text for k in ["notice", "days", "joining"]):
                         inp.fill("15")
-                    elif any(k in label_text for k in ["city", "location"]):
+                    elif any(k in label_text for k in ["college", "university", "institute", "education"]):
+                        inp.fill("Punjab Engineering College (PEC)")
+                    elif any(k in label_text for k in ["company", "organization", "employer"]):
+                        inp.fill("Traya (D2C)")
+                    elif any(k in label_text for k in ["designation", "role", "title"]):
+                        inp.fill("Business Strategy Intern")
+                    elif any(k in label_text for k in ["city", "location", "current city"]):
                         inp.fill("Mumbai")
-                    elif any(k in label_text for k in ["college", "university"]):
-                        inp.fill("Punjab Engineering College")
+                    elif any(k in label_text for k in ["headline", "summary", "about", "describe"]):
+                        inp.fill(CANDIDATE_SUMMARY_SHORT)
                     else:
                         inp.fill("1")
                     human_delay(0.3, 0.6)
+                except Exception:
+                    pass
+
+            # 4. Handle Chatbot message send button / chat input
+            chat_input = drawer.locator("div.chat-input textarea, input[placeholder*='Type a message'], div.chatbot-container input").first
+            if chat_input.count() > 0 and chat_input.is_visible():
+                try:
+                    chat_input.fill(CANDIDATE_SUMMARY_SHORT)
+                    human_delay(0.5, 1.0)
+                    send_btn = drawer.locator("button.send-btn, button[aria-label*='Send'], div.chat-send").first
+                    if send_btn.count() > 0 and send_btn.is_visible():
+                        send_btn.click()
+                    else:
+                        page.keyboard.press("Enter")
+                    human_delay(1.5, 2.5)
                 except Exception:
                     pass
 

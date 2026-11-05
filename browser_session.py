@@ -70,8 +70,8 @@ class BrowserManager:
         except Exception:
             logger.info("Chrome port 9222 not available. Using persistent automation profile.")
 
-        # Method 2: Launch persistent browser context with isolated profile per platform
-        target_profile_dir = PROFILE_DIR if self.profile_name == "default" else os.path.join(BASE_DIR, f"chrome_profile_{self.profile_name}")
+        # Method 2: Launch persistent browser context with authenticated profile
+        target_profile_dir = PROFILE_DIR
         os.makedirs(target_profile_dir, exist_ok=True)
         
         # Clean up stale singleton lock if process is dead

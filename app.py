@@ -139,6 +139,17 @@ def get_stats():
 
     now_ist = datetime.now(IST)
     is_active_shift = 9 <= now_ist.hour < 19
+    mem_mb = 0
+    try:
+        import psutil
+        p = psutil.Process(os.getpid())
+        mem_mb = round(p.memory_info().rss / 1024 / 1024, 1)
+        for child in p.children(recursive=True):
+            mem_mb += round(child.memory_info().rss / 1024 / 1024, 1)
+        mem_mb = round(mem_mb, 1)
+    except Exception:
+        pass
+
     return {
         "naukri_today": naukri_count,
         "linkedin_today": linkedin_count,
@@ -151,7 +162,8 @@ def get_stats():
         "naukri_boost": boost_status,
         "current_task": CURRENT_TASK,
         "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
-        "ist_time": now_ist.strftime("%H:%M:%S IST")
+        "ist_time": now_ist.strftime("%H:%M:%S IST"),
+        "ram_mb": mem_mb
     }
 
 

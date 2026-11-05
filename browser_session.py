@@ -104,7 +104,10 @@ class BrowserManager:
         launch_kwargs = {
             "user_data_dir": target_profile_dir,
             "headless": is_headless,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "viewport": {"width": 1280, "height": 800},
+            "locale": "en-US",
+            "timezone_id": "Asia/Kolkata",
             "ignore_default_args": ["--enable-automation"],
             "args": [
                 "--disable-blink-features=AutomationControlled",
@@ -131,16 +134,32 @@ class BrowserManager:
 
         # Automatically inject session cookies if present
         session_file = os.path.join(BASE_DIR, "data", "session_cookies.json")
+        cookies = []
         if os.path.exists(session_file):
             try:
                 with open(session_file, "r", encoding="utf-8") as f:
                     sdata = json.load(f)
                 cookies = sdata.get("cookies", [])
-                if cookies:
-                    self.context.add_cookies(cookies)
-                    logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")
             except Exception as e:
-                logger.warning(f"Failed to auto-inject cookies: {e}")
+                logger.warning(f"Failed to auto-inject cookies from file: {e}")
+
+        # Fallback to SESSION_COOKIES_BASE64 if file missing or empty
+        if not cookies:
+            env_b64 = os.environ.get("SESSION_COOKIES_BASE64", "")
+            if env_b64:
+                try:
+                    import base64
+                    sdata = json.loads(base64.b64decode(env_b64.strip()).decode("utf-8"))
+                    cookies = sdata.get("cookies", [])
+                except Exception as e:
+                    logger.warning(f"Failed to decode SESSION_COOKIES_BASE64: {e}")
+
+        if cookies:
+            try:
+                self.context.add_cookies(cookies)
+                logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")
+            except Exception as e:
+                logger.warning(f"Failed to add cookies: {e}")
 
         page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
@@ -149,7 +168,21 @@ class BrowserManager:
 
         page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.navigator.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
         """)
+
+        try:
+            page.set_extra_http_headers({
+                "Accept-Language": "en-US,en;q=0.9",
+                "Sec-Ch-Ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"macOS"',
+                "Upgrade-Insecure-Requests": "1"
+            })
+        except Exception:
+            pass
 
         return self.context, page
 

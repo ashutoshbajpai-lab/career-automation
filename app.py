@@ -315,6 +315,13 @@ MERAKI_UI_HTML = """
           <span>RUN EVERYTHING</span>
         </button>
 
+        <!-- SINGLE BUTTON: NAUKRI UPDATE & APPLY ONLY -->
+        <button onclick="triggerAction('naukri_all')" title="Single Button: Update Naukri Recency & Apply to 50+ Aligned Jobs ONLY"
+                class="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-amber-500/25 cursor-pointer">
+          <i class="fa-solid fa-bolt text-amber-100"></i>
+          <span>Naukri Update & Apply</span>
+        </button>
+
         <!-- SEPARATE DEDICATED MESSAGING BUTTON -->
         <button onclick="triggerAction('send_messages')" title="Send Referral Messages & Notes to Approved Connections (SEPARATE from Connection Requests)"
                 class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-purple-600/30 cursor-pointer">
@@ -324,33 +331,23 @@ MERAKI_UI_HTML = """
 
         <!-- STANDALONE COMPANY & STARTUP CONNECTIONS (NO NOTE) -->
         <button onclick="triggerAction('company_connect')" title="Search Mumbai Companies & Startups: check Jobs section, send Connection Requests Only (No Note)"
-                class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
+                class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
           <i class="fa-solid fa-building text-sky-600"></i>
           <span>Connect Startups</span>
         </button>
 
-        <button onclick="triggerAction('naukri_boost')" title="Toggle Profile Summary for 'Updated Today'"
-                class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
-          <i class="fa-solid fa-bolt text-amber-500"></i>
-          <span>Boost</span>
-        </button>
-        <button onclick="triggerAction('naukri_apply')" title="Execute 50+ Mass Apply on Naukri"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1 shadow-sm shadow-indigo-600/30">
-          <i class="fa-solid fa-rocket"></i>
-          <span>Naukri 50+</span>
+        <button onclick="triggerAction('linkedin_feed')" title="Harvest Feed for 100+ Hiring Posts, Forms & Recruiter Emails"
+                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+          <i class="fa-solid fa-rss text-indigo-500"></i>
+          <span>Feed (100+)</span>
         </button>
         <button onclick="triggerAction('linkedin_apply')" title="Execute LinkedIn Easy Apply for Analyst/PM"
-                class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
+                class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
           <i class="fa-brands fa-linkedin text-blue-600"></i>
           <span>Easy Apply</span>
         </button>
-        <button onclick="triggerAction('linkedin_feed')" title="Harvest Feed for Hiring Posts & Forms"
-                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
-          <i class="fa-solid fa-rss text-indigo-500"></i>
-          <span>Feed</span>
-        </button>
         <button onclick="triggerAction('scan_gmail')" title="Scan Full Inbox for Application Updates"
-                class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
+                class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
           <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
           <span>Gmail</span>
         </button>
@@ -2289,6 +2286,25 @@ def execute_task(task_type):
             conns = engine.get_existing_connections(limit=10)
             results = engine.send_outreach_batch(conns)
             add_log(f"SUCCESS: Sent {len(results)} personalized referral messages.")
+
+        elif task_type in ["naukri_all", "naukri_update_and_apply"]:
+            add_log("⚡ NAUKRI AUTOPILOT ACTIVATED: Running Recency Boost & 50+ Mass Apply...")
+            try:
+                naukri = NaukriAutomator()
+                add_log("[1/2] Updating Naukri profile headline for 'Updated: Today' boost...")
+                res_boost = naukri.boost_profile()
+                add_log(f"✅ [1/2] Naukri Boost completed: {res_boost.get('status')}")
+            except Exception as e:
+                add_log(f"⚠️ [1/2] Naukri Boost notice: {e}")
+
+            try:
+                naukri = NaukriAutomator()
+                add_log("[2/2] Launching Naukri High-Volume Mass Apply (Target: 50+)...")
+                res_apply = naukri.apply_jobs(daily_target=50)
+                add_log(f"✅ [2/2] Naukri Mass Apply finished! Applied: {res_apply.get('applied_count')}, Queued: {res_apply.get('manual_queued_count')}")
+            except Exception as e:
+                add_log(f"⚠️ [2/2] Naukri Apply notice: {e}")
+            add_log("🎉 Naukri Update & Mass Apply operations completed!")
 
         elif task_type == "naukri_boost":
             add_log("Starting Naukri Daily Recency Boost...")

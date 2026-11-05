@@ -83,7 +83,7 @@ class FeedHarvester:
         self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 28
+        max_scroll_passes = 55
 
         # Focus feed container
         try:
@@ -111,12 +111,15 @@ class FeedHarvester:
                     items.forEach(el => {
                         const text = (el.innerText || '').trim();
                         if (text.length > 50) {
+                            const authorEl = el.querySelector(".update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
+                            const authorName = authorEl ? (authorEl.innerText || '').trim() : '';
                             const links = Array.from(el.querySelectorAll('a')).map(a => ({
                                 href: a.href,
                                 text: (a.innerText || '').trim()
                             }));
                             results.push({
                                 text: text,
+                                author: authorName,
                                 links: links
                             });
                         }
@@ -136,26 +139,31 @@ class FeedHarvester:
                 break
 
             if scroll_i % 3 == 0:
-                self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Extracted {len(raw_items)} distinct posts so far...")
+                self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")
 
-            # 3. Dual scroll: absolute pixel advance + OS keyboard event to trigger infinite scroll
-            scroll_y = scroll_i * 1300
+            # 3. Dual scroll: step advance + OS keyboard event + load button click
             try:
-                self.page.evaluate(f"window.scrollTo(0, {scroll_y});")
-                self.page.keyboard.press("PageDown")
                 self.page.evaluate('''() => {
-                    const btn = document.querySelector("button.scaffold-finite-scroll__load-button");
-                    if (btn) btn.click();
+                    const main = document.querySelector('main') || document.querySelector('.scaffold-layout__main') || document.body;
+                    if (main) main.focus();
+                    window.scrollBy({ top: 1200, behavior: 'instant' });
+                    const btn = document.querySelector("button.scaffold-finite-scroll__load-button, button.artdeco-button--muted");
+                    if (btn) { try { btn.click(); } catch(e) {} }
                 }''')
-                human_delay(1.0, 1.5)
+                self.page.keyboard.press("PageDown")
+                human_delay(1.2, 1.8)
             except Exception:
                 pass
+
+            if scroll_i % 10 == 0:
+                import gc
+                gc.collect()
 
         self._log(f"Analyzed feed: Successfully extracted {len(raw_items)} distinct post cards. Filtering for opportunities...")
 
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []
-        max_posts = self.config.get("limits", {}).get("max_feed_posts_per_run", 50)
+        max_posts = max(100, int(self.config.get("limits", {}).get("max_feed_posts_per_run", 100)))
         lead_keywords = [k.lower() for k in self.config.get("lead_keywords", ["hiring", "intern", "analyst", "product", "referral", "opening", "job"])]
 
         for item in raw_items:
@@ -196,9 +204,11 @@ class FeedHarvester:
                     if clean_m not in form_links:
                         form_links.append(clean_m)
 
-            # Extract Author from text header
-            lines = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().startswith("Feed post") and not "likes this" in line]
-            author = lines[0] if lines else "LinkedIn Member"
+            # Extract Author from element metadata or text header
+            author = item.get("author", "").strip()
+            if not author:
+                lines = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().startswith("Feed post") and not "likes this" in line]
+                author = lines[0] if lines else "LinkedIn Member"
 
             has_keyword = any(kw in text_lower for kw in lead_keywords)
             if emails or form_links or (has_keyword and external_links):

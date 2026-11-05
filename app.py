@@ -30,7 +30,7 @@ from browser_session import BrowserManager
 from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
-from recruitment_dispatcher import sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON
+from recruitment_dispatcher import sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON, dismiss_pending_form, clear_all_pending_forms, dismiss_recruiter_lead
 from company_network_expander import CompanyNetworkExpander
 from feed_harvester import FeedHarvester
 from job_scanner import JobScanner
@@ -726,10 +726,16 @@ MERAKI_UI_HTML = """
               </h3>
               <p class="text-xs text-slate-400">Hiring vacancy posts containing direct Google Forms or Typeforms. Saved here for your manual application.</p>
             </div>
-            <button onclick="triggerAction('linkedin_feed')" class="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-600/30">
-              <i class="fa-solid fa-rss"></i>
-              <span>Harvest Fresh Feed Posts</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button onclick="clearAllPendingForms()" title="Clear all pending forms from desk" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-200 transition cursor-pointer">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Clear All</span>
+              </button>
+              <button onclick="triggerAction('linkedin_feed')" class="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-teal-600/30 cursor-pointer">
+                <i class="fa-solid fa-rss"></i>
+                <span>Harvest Fresh Feed Posts</span>
+              </button>
+            </div>
           </div>
 
           <div class="overflow-x-auto">
@@ -740,7 +746,7 @@ MERAKI_UI_HTML = """
                   <th class="p-3">Poster / Company</th>
                   <th class="p-3">Context / Hiring Details</th>
                   <th class="p-3">Status</th>
-                  <th class="p-3 text-right">Direct Form</th>
+                  <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="pendingFormsTableBody">
@@ -1438,12 +1444,19 @@ MERAKI_UI_HTML = """
             <td class="p-3">
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status}</span>
             </td>
-            <td class="p-3 text-right">
-              <a href="${f.form_url}" target="_blank"
-                 class="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
-                <span>Open & Fill Form</span>
-                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-              </a>
+            <td class="p-3 text-right whitespace-nowrap">
+              <div class="inline-flex items-center gap-2 justify-end">
+                <a href="${f.form_url}" target="_blank"
+                   class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
+                  <span>Open &amp; Fill Form</span>
+                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                </a>
+                <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
+                        class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                  <span>Remove</span>
+                </button>
+              </div>
             </td>
           </tr>
         `).join('');
@@ -1473,14 +1486,20 @@ MERAKI_UI_HTML = """
               <div class="text-[11px] text-slate-400 truncate">${e.draft_body.slice(0, 80)}...</div>
             </td>
             <td class="p-3 text-right whitespace-nowrap">
-              <a href="${e.gmail_web_link}" target="_blank"
-                 class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20 mr-1.5">
-                <i class="fa-solid fa-envelope"></i>
-                <span>Send via Gmail</span>
-              </a>
-              <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
-                <i class="fa-solid fa-paper-plane"></i>
-              </a>
+              <div class="inline-flex items-center gap-1.5 justify-end">
+                <a href="${e.gmail_web_link}" target="_blank"
+                   class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20">
+                  <i class="fa-solid fa-envelope"></i>
+                  <span>Send via Gmail</span>
+                </a>
+                <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </a>
+                <button onclick="removeRecruiterLead('${e.id}')" title="Dismiss / Remove this recruiter lead"
+                        class="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs transition cursor-pointer">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
             </td>
           </tr>
         `).join('');
@@ -2014,6 +2033,60 @@ MERAKI_UI_HTML = """
       }
     }
 
+    async function removePendingForm(formId) {
+      if (!confirm("Remove this pending application form from your desk?")) return;
+      try {
+        const res = await fetch('/api/pending_forms/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: formId })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadPendingForms();
+          pollDashboardData();
+        } else {
+          alert("Error: " + (d.error || "Could not remove form"));
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function clearAllPendingForms() {
+      if (!confirm("Are you sure you want to remove ALL pending forms from your desk?")) return;
+      try {
+        const res = await fetch('/api/pending_forms/clear_all', { method: 'POST' });
+        const d = await res.json();
+        if (d.success) {
+          loadPendingForms();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function removeRecruiterLead(leadId) {
+      if (!confirm("Remove this recruiter lead from your desk?")) return;
+      try {
+        const res = await fetch('/api/recruiter_leads/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: leadId })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadRecruiterLeads();
+          pollDashboardData();
+        } else {
+          alert("Error: " + (d.error || "Could not remove recruiter lead"));
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
     // Polling Intervals
     setInterval(pollDashboardData, 3000);
     setInterval(pollLogs, 1500);
@@ -2131,10 +2204,43 @@ def pending_forms():
     return jsonify({"forms": res.get("forms", [])})
 
 
+@app.route("/api/pending_forms/remove", methods=["POST"])
+def remove_pending_form_route():
+    data = request.json or {}
+    form_id = data.get("id")
+    form_url = data.get("form_url")
+    if not form_id and not form_url:
+        return jsonify({"success": False, "error": "Missing form id or url"}), 400
+    dismiss_pending_form(form_id=form_id, form_url=form_url)
+    res = sync_leads()
+    add_log(f"🗑️ Application form {form_id or form_url} removed from pending desk.")
+    return jsonify({"success": True, "remaining_count": len(res.get("forms", []))})
+
+
+@app.route("/api/pending_forms/clear_all", methods=["POST"])
+def clear_all_pending_forms_route():
+    cleared = clear_all_pending_forms()
+    add_log(f"🗑️ Cleared all {cleared} pending application forms from desk.")
+    return jsonify({"success": True, "cleared_count": cleared})
+
+
 @app.route("/api/recruiter_leads")
 def recruiter_leads():
     res = sync_leads()
     return jsonify({"emails": res.get("emails", [])})
+
+
+@app.route("/api/recruiter_leads/remove", methods=["POST"])
+def remove_recruiter_lead_route():
+    data = request.json or {}
+    lead_id = data.get("id")
+    email = data.get("email")
+    if not lead_id and not email:
+        return jsonify({"success": False, "error": "Missing lead id or email"}), 400
+    dismiss_recruiter_lead(lead_id=lead_id, email=email)
+    res = sync_leads()
+    add_log(f"🗑️ Recruiter lead {lead_id or email} removed from desk.")
+    return jsonify({"success": True, "remaining_count": len(res.get("emails", []))})
 
 
 @app.route("/api/crawl_company", methods=["POST"])

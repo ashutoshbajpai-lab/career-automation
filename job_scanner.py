@@ -54,6 +54,10 @@ class JobScanner:
 
     def run(self) -> dict:
         self._log("Starting LinkedIn Job Scanner & Application Router...")
+        try:
+            self.page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+        except Exception:
+            pass
         target_roles = self.config.get("target_roles", ["Analyst", "Associate Product Manager"])
         location = self.config.get("location", "India")
         limits = self.config.get("limits", {})

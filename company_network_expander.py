@@ -72,6 +72,10 @@ class CompanyNetworkExpander:
         target_roles = cfg.get("target_roles", ["Analyst", "Product Manager", "Associate Product Manager"])
         
         context, page = self.browser_mgr.get_context_and_page()
+        try:
+            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+        except Exception:
+            pass
         if not self.browser_mgr.ensure_logged_in(page):
             logger.error("LinkedIn login required for company network expansion.")
             return {"status": "Failed", "reason": "Not logged in"}

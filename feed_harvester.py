@@ -50,16 +50,22 @@ class FeedHarvester:
                 pass
 
     def run(self) -> list:
+        self._log("Configuring lightweight page route (blocking media & heavy fonts to optimize RAM)...")
+        try:
+            self.page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+        except Exception:
+            pass
+
         self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
         try:
-            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=25000)
+            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=20000)
         except Exception as e:
             self._log(f"Navigation notice: {e}")
             try:
-                self.page.goto("https://www.linkedin.com/feed/", timeout=20000)
+                self.page.goto("https://www.linkedin.com/feed/", timeout=15000)
             except Exception:
                 pass
-        human_delay(2.0, 3.5)
+        human_delay(2.0, 3.0)
 
         current_url = self.page.url
         current_title = self.page.title()

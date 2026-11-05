@@ -42,6 +42,10 @@ class NaukriAutomator:
 
         try:
             try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
+            try:
                 page.goto("https://www.naukri.com/mnjuser/profile", wait_until="domcontentloaded", timeout=30000)
             except Exception:
                 page.goto("https://www.naukri.com/mnjuser/profile")
@@ -215,6 +219,11 @@ class NaukriAutomator:
         seen_job_urls = self._get_seen_urls()
 
         try:
+            try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
+
             for role in target_roles:
                 if len(applied_list) >= daily_target:
                     break

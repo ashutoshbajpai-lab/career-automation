@@ -118,8 +118,6 @@ class BrowserManager:
                 "--disable-gpu",
                 "--disable-accelerated-2d-canvas",
                 "--window-size=1280,800",
-                "--js-flags=--max-old-space-size=256",
-                "--renderer-process-limit=1",
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--disable-component-update",

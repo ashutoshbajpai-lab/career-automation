@@ -2455,4 +2455,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5055))
     host = os.environ.get("HOST", "0.0.0.0")
     logger.info(f"Starting Careercommand on http://{host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    app.run(host=host, port=port, debug=False, threaded=True)

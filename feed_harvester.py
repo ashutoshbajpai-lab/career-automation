@@ -83,42 +83,25 @@ class FeedHarvester:
         self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 55
-
-        # Focus feed container
-        try:
-            self.page.mouse.move(640, 400)
-            self.page.mouse.click(640, 400)
-        except Exception:
-            pass
+        max_scroll_passes = 65
 
         for scroll_i in range(1, max_scroll_passes + 1):
-            # 1. Expand all '...see more' buttons currently visible in the DOM
-            try:
-                self.page.evaluate('''() => {
-                    document.querySelectorAll("button.feed-shared-inline-show-more-text__see-more-less-toggle, button[aria-label*='see more']").forEach(b => {
-                        try { b.click(); } catch(e) {}
-                    });
-                }''')
-            except Exception:
-                pass
-
-            # 2. Extract visible cards at current scroll position
+            # 1. High-performance card extraction using textContent (zero layout reflow)
             try:
                 batch = self.page.evaluate('''() => {
-                    const items = document.querySelectorAll('div.feed-shared-update-v2, div[data-urn*="activity"], div.occludable-update, [data-lazy-mount-id]');
+                    const mounts = Array.from(document.querySelectorAll('[data-lazy-mount-id], div.feed-shared-update-v2, div[data-urn*="activity"]'));
                     const results = [];
-                    items.forEach(el => {
-                        const text = (el.innerText || '').trim();
-                        if (text.length > 50) {
+                    mounts.forEach(el => {
+                        const rawText = (el.textContent || '').trim();
+                        if (rawText.length > 120) {
                             const authorEl = el.querySelector(".update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
-                            const authorName = authorEl ? (authorEl.innerText || '').trim() : '';
+                            const authorName = authorEl ? (authorEl.textContent || '').trim() : '';
                             const links = Array.from(el.querySelectorAll('a')).map(a => ({
                                 href: a.href,
-                                text: (a.innerText || '').trim()
+                                text: (a.textContent || '').trim()
                             }));
                             results.push({
-                                text: text,
+                                text: rawText,
                                 author: authorName,
                                 links: links
                             });
@@ -138,24 +121,21 @@ class FeedHarvester:
                 self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
                 break
 
-            if scroll_i % 3 == 0:
+            if scroll_i % 5 == 0:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")
 
-            # 3. Dual scroll: step advance + OS keyboard event + load button click
+            # 2. Smoothly advance <main> container scroll position & trigger LinkedIn infinite scroll
             try:
                 self.page.evaluate('''() => {
-                    const main = document.querySelector('main') || document.querySelector('.scaffold-layout__main') || document.body;
-                    if (main) main.focus();
-                    window.scrollBy({ top: 1200, behavior: 'instant' });
-                    const btn = document.querySelector("button.scaffold-finite-scroll__load-button, button.artdeco-button--muted");
-                    if (btn) { try { btn.click(); } catch(e) {} }
+                    const main = document.querySelector('main') || document.scrollingElement || document.body;
+                    main.scrollTop += 950;
+                    window.scrollBy(0, 950);
                 }''')
-                self.page.keyboard.press("PageDown")
-                human_delay(1.2, 1.8)
+                human_delay(0.9, 1.4)
             except Exception:
                 pass
 
-            if scroll_i % 10 == 0:
+            if scroll_i % 15 == 0:
                 import gc
                 gc.collect()
 

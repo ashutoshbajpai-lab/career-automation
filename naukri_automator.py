@@ -41,32 +41,48 @@ class NaukriAutomator:
         context, page = self.browser_mgr.get_context_and_page()
 
         try:
-            page.goto("https://www.naukri.com/mnjuser/profile", wait_until="domcontentloaded")
-            human_delay(3.5, 5.0)
+            try:
+                page.goto("https://www.naukri.com/mnjuser/profile", wait_until="domcontentloaded", timeout=30000)
+            except Exception:
+                page.goto("https://www.naukri.com/mnjuser/profile")
+            
+            human_delay(4.0, 6.0)
 
             # Check if login is required
             if "login" in page.url or "nlogin" in page.url:
-                logger.warning("Naukri login required. Please sign in to Naukri in the opened browser window.")
-                # Give user time to log in if needed
-                for _ in range(60):
-                    human_delay(2.0, 2.0)
-                    if "profile" in page.url:
-                        break
-                if "login" in page.url:
-                    return {"status": "Login Required", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                logger.warning("Naukri login required. Current URL: " + page.url)
+                record = {"status": "Login Required", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                self._save_boost_log(record)
+                return record
+
+            # Scroll down to trigger lazy-loading of Profile Summary & Headline components
+            logger.info("Scrolling profile to trigger lazy-loaded sections...")
+            for scroll_pos in [200, 500, 800]:
+                try:
+                    page.evaluate(f"window.scrollTo(0, {scroll_pos});")
+                    human_delay(0.8, 1.2)
+                except Exception:
+                    pass
+
+            # Wait for any profile card or edit pencil to mount in the DOM
+            try:
+                page.wait_for_selector(".profileSummary, div.resumeHeadline, div.widgetHead, span.new-pencil, span.edit", timeout=12000)
+            except Exception:
+                pass
 
             # Locate Profile Summary / Resume Headline Edit button
             logger.info("Locating Profile Summary / Headline section on Naukri profile...")
+            
             # 1. Primary: Profile Summary pencil
-            pencil = page.locator(".profileSummary span.new-pencil, .profileSummary img[alt='pencil'], div.profileSummary span.new-pencil").first
-            if pencil.count() > 0:
+            pencil = page.locator(".profileSummary span.new-pencil, .profileSummary img[alt='pencil'], div.profileSummary span.new-pencil, div.widgetHead:has-text('Profile summary') span.edit, span[data-ga-track*='Profile Summary']").first
+            if pencil.count() > 0 and pencil.is_visible():
                 logger.info("Found Profile Summary edit pencil. Clicking...")
                 pencil.scroll_into_view_if_needed()
                 human_delay(1.0, 1.5)
                 pencil.click()
                 human_delay(1.5, 2.5)
 
-                summary_textarea = page.locator("textarea#summary, textarea.fn-inp-md").first
+                summary_textarea = page.locator("textarea#summary, textarea.fn-inp-md, textarea[name='summary']").first
                 if summary_textarea.count() > 0:
                     current_val = summary_textarea.input_value().strip()
                     # Recency hack: toggle trailing period
@@ -75,7 +91,7 @@ class NaukriAutomator:
                     summary_textarea.fill(new_val)
                     human_delay(1.0, 2.0)
 
-                    save_btn = page.locator("button.btn-blue:has-text('Save'), button:has-text('Save')").first
+                    save_btn = page.locator("button.btn-blue:has-text('Save'), button:has-text('Save'), form button[type='submit']").first
                     if save_btn.count() > 0:
                         save_btn.click()
                         human_delay(2.5, 3.5)
@@ -90,22 +106,22 @@ class NaukriAutomator:
                         return record
 
             # 2. Fallback: Resume headline widget
-            edit_btn = page.locator("div.resumeHeadline span.edit, span[data-ga-track*='Resume Headline'], div.widgetHead:has-text('Resume headline') span.edit").first
-            if edit_btn.count() == 0 or not edit_btn.is_visible():
-                edit_btn = page.locator("span.icon.edit").first
-
-            if edit_btn.count() > 0:
+            edit_btn = page.locator("div.resumeHeadline span.edit, span[data-ga-track*='Resume Headline'], div.widgetHead:has-text('Resume headline') span.edit, div.resumeHeadline span.new-pencil, span.icon.edit").first
+            if edit_btn.count() > 0 and edit_btn.is_visible():
+                logger.info("Found Resume Headline edit button. Clicking...")
+                edit_btn.scroll_into_view_if_needed()
+                human_delay(1.0, 1.5)
                 edit_btn.click()
                 human_delay(1.5, 2.5)
 
-                textarea = page.locator("textarea#resumeHeadlineTxt, div.resumeHeadline textarea").first
+                textarea = page.locator("textarea#resumeHeadlineTxt, div.resumeHeadline textarea, textarea.resumeHeadlineTxt").first
                 if textarea.count() > 0:
                     current_val = textarea.input_value().strip()
                     new_val = current_val[:-1] if current_val.endswith(".") else current_val + "."
                     textarea.fill(new_val)
                     human_delay(1.0, 2.0)
 
-                    save_btn = page.locator("button:has-text('Save'), div.action button.btn-dark-ot").first
+                    save_btn = page.locator("button:has-text('Save'), div.action button.btn-dark-ot, button[type='submit']:has-text('Save')").first
                     if save_btn.count() > 0:
                         save_btn.click()
                         human_delay(2.0, 3.0)
@@ -119,8 +135,16 @@ class NaukriAutomator:
                         self._save_boost_log(record)
                         return record
 
-            logger.warning("Could not interact with resume headline edit button.")
-            record = {"status": "Headline Element Not Found", "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            # Capture debug screenshot for review
+            debug_shot = os.path.join(DATA_DIR, "naukri_profile_screen.png")
+            try:
+                page.screenshot(path=debug_shot, full_page=False)
+                logger.info(f"Captured debug screenshot at {debug_shot}")
+            except Exception:
+                pass
+
+            logger.warning(f"Could not interact with headline or summary edit button. Current page title: {page.title()}, URL: {page.url}")
+            record = {"status": "Headline Element Not Found", "url": page.url, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             self._save_boost_log(record)
             return record
 

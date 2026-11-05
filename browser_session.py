@@ -74,14 +74,17 @@ class BrowserManager:
         target_profile_dir = PROFILE_DIR
         os.makedirs(target_profile_dir, exist_ok=True)
         
-        # Clean up stale singleton lock if process is dead
-        for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-            lp = os.path.join(target_profile_dir, lock_file)
-            if os.path.exists(lp) or os.path.islink(lp):
-                try:
-                    os.unlink(lp)
-                except Exception:
-                    pass
+        # Clean up stale singleton locks or leftover locks if process was terminated
+        try:
+            for item in os.listdir(target_profile_dir):
+                if item.startswith("Singleton") or item.endswith(".lock") or item == "lockfile":
+                    lp = os.path.join(target_profile_dir, item)
+                    try:
+                        os.unlink(lp)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         # Concurrency safety: acquire execution lock with fast 5s timeout instead of hanging 180s
         if not BROWSER_LOCK.acquire(timeout=5):
@@ -104,8 +107,9 @@ class BrowserManager:
         launch_kwargs = {
             "user_data_dir": target_profile_dir,
             "headless": is_headless,
+            "timeout": 35000,
             "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            "viewport": {"width": 1280, "height": 800},
+            "viewport": {"width": 1024, "height": 768},
             "locale": "en-US",
             "timezone_id": "Asia/Kolkata",
             "ignore_default_args": ["--enable-automation"],
@@ -116,17 +120,21 @@ class BrowserManager:
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--disable-gpu-compositing",
+                "--use-gl=disabled",
                 "--disable-software-rasterizer",
-                "--in-process-gpu",
                 "--blink-settings=imagesEnabled=false",
                 "--renderer-process-limit=1",
+                "--no-zygote",
+                "--mute-audio",
                 "--disk-cache-size=1",
                 "--media-cache-size=1",
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--disable-component-update",
                 "--disable-sync",
-                "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,Translate,OptimizationHints,MediaRouter"
+                "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,Translate,OptimizationHints,MediaRouter,BackForwardCache",
+                "--js-flags=--max-old-space-size=160 --optimize_for_size"
             ]
         }
         if os.path.exists(chrome_executable):
@@ -162,7 +170,15 @@ class BrowserManager:
                 self.context.add_cookies(cookies)
                 logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")
             except Exception as e:
-                logger.warning(f"Failed to add cookies: {e}")
+                logger.warning(f"Failed to add all cookies en masse: {e}. Retrying individually...")
+                added = 0
+                for c in cookies:
+                    try:
+                        self.context.add_cookies([c])
+                        added += 1
+                    except Exception:
+                        pass
+                logger.info(f"Injected {added}/{len(cookies)} authentication cookies individually.")
 
         page = self.context.pages[0] if self.context.pages else self.context.new_page()
 

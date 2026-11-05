@@ -82,17 +82,21 @@ class FeedHarvester:
         self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 75
+        max_scroll_passes = 120
 
         for scroll_i in range(1, max_scroll_passes + 1):
             try:
                 new_cards = self.page.evaluate('''() => {
+                    // Click see more to expand truncated recruiter emails and links
+                    document.querySelectorAll('button.feed-shared-inline-show-more-text, button[aria-label*="see more"]').forEach(b => {
+                        try { b.click(); } catch(e) {}
+                    });
                     const mounts = Array.from(document.querySelectorAll('[data-lazy-mount-id]:not([data-harvested]), div.feed-shared-update-v2:not([data-harvested]), div[data-urn*="activity"]:not([data-harvested])'));
                     const results = [];
                     mounts.forEach(el => {
                         el.setAttribute('data-harvested', '1');
                         const rawText = (el.textContent || '').trim();
-                        if (rawText.length > 100) {
+                        if (rawText.length > 80) {
                             const authorEl = el.querySelector(".update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
                             const authorName = authorEl ? (authorEl.textContent || '').trim() : '';
                             const links = Array.from(el.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
@@ -104,8 +108,9 @@ class FeedHarvester:
                         }
                     });
                     const main = document.querySelector('main') || document.scrollingElement || document.body;
-                    main.scrollTop += 1200;
-                    window.scrollBy(0, 1200);
+                    main.scrollTop += 1400;
+                    window.scrollBy(0, 1400);
+                    window.dispatchEvent(new Event('scroll'));
                     return results;
                 }''')
                 for card in new_cards:

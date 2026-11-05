@@ -39,8 +39,13 @@ def main():
     linkedin_cookies = [c for c in cookies if "linkedin" in c.get("domain", "")]
     naukri_cookies = [c for c in cookies if "naukri" in c.get("domain", "")]
 
-    logger.info(f"Found {len(linkedin_cookies)} LinkedIn cookies (li_at present: {any(c['name'] == 'li_at' for c in linkedin_cookies)}).")
+    has_li_at = any(c['name'] == 'li_at' for c in linkedin_cookies)
+    logger.info(f"Found {len(linkedin_cookies)} LinkedIn cookies (li_at present: {has_li_at}).")
     logger.info(f"Found {len(naukri_cookies)} Naukri cookies.")
+
+    if not has_li_at:
+        logger.error("ABORTING EXPORT: No active 'li_at' cookie found in profile! Preserving existing session file.")
+        return
 
     payload = {
         "exported_at": os.popen("date").read().strip(),

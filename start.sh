@@ -7,12 +7,15 @@ if [ -n "$SESSION_COOKIES_BASE64" ]; then
     echo "$SESSION_COOKIES_BASE64" | base64 -d > data/session_cookies.json
 fi
 
-# Start Xvfb virtual frame buffer for full headed stealth execution on Linux
-if command -v Xvfb >/dev/null 2>&1; then
+# Start Xvfb only if explicitly forced to headed mode
+if [ "$HEADLESS" = "false" ] && command -v Xvfb >/dev/null 2>&1; then
     echo "--> Starting lightweight Xvfb virtual display on :99..."
     Xvfb :99 -screen 0 1024x768x16 -nolisten tcp -ac +extension GLX +render -noreset &
     export DISPLAY=:99
     sleep 2
+else
+    echo "--> Running in ultra-lightweight headless stealth mode (RAM < 160MB)..."
+    unset DISPLAY
 fi
 
 echo "--> Initializing Cloud Session Cookies..."

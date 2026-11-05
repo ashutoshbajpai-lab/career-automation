@@ -3,8 +3,7 @@ FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
-ENV HEADLESS=false
-ENV DISPLAY=:99
+ENV HEADLESS=true
 ENV PORT=5055
 ENV HOST=0.0.0.0
 ENV TZ=Asia/Kolkata

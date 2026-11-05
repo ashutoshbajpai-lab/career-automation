@@ -1,5 +1,6 @@
 # Ignore local browser cache & heavy profile binaries
 chrome_profile/
+chrome_profile_*/
 __pycache__/
 *.pyc
 .DS_Store

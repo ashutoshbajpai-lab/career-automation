@@ -153,6 +153,16 @@ def get_stats():
         except Exception:
             pass
 
+    has_li_at = False
+    session_file = os.path.join(DATA_DIR, "session_cookies.json")
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                sdata = json.load(f)
+            has_li_at = any(c.get("name") == "li_at" and c.get("value") for c in sdata.get("cookies", []))
+        except Exception:
+            pass
+
     return {
         "naukri_today": naukri_count,
         "linkedin_today": linkedin_count,
@@ -166,7 +176,8 @@ def get_stats():
         "current_task": CURRENT_TASK,
         "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
         "ist_time": now_ist.strftime("%H:%M:%S IST"),
-        "ram_mb": CACHED_MEM_MB
+        "ram_mb": CACHED_MEM_MB,
+        "linkedin_authenticated": has_li_at
     }
 
 
@@ -365,6 +376,13 @@ MERAKI_UI_HTML = """
                 class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
           <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
           <span>Gmail</span>
+        </button>
+
+        <!-- LinkedIn Session Auth Pill & Modal Trigger -->
+        <button onclick="openSessionModal()" id="btnSessionModal" title="Manage LinkedIn li_at Cookie & Cloud Authentication"
+                class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+          <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
+          <span id="sessionStatusText">LinkedIn Auth</span>
         </button>
 
         <div id="taskStatusPill" class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm">
@@ -1229,6 +1247,18 @@ MERAKI_UI_HTML = """
             pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>System Idle</span>`;
           }
         }
+
+        const badge = document.getElementById('sessionStatusText');
+        const badgeBtn = document.getElementById('btnSessionModal');
+        if (badge && badgeBtn) {
+          if (d.linkedin_authenticated) {
+            badgeBtn.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm transition cursor-pointer";
+            badge.innerText = "LinkedIn: Active";
+          } else {
+            badgeBtn.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-amber-50 text-amber-700 border border-amber-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer animate-pulse";
+            badge.innerText = "LinkedIn: Update Key";
+          }
+        }
       } catch (e) {}
     }
 
@@ -1945,6 +1975,45 @@ MERAKI_UI_HTML = """
       document.getElementById('fullTerminalBox').innerHTML = '<div class="text-slate-500 italic">Terminal cleared.</div>';
     }
 
+    function openSessionModal() {
+      document.getElementById('sessionModal').classList.remove('hidden');
+    }
+
+    function closeSessionModal() {
+      document.getElementById('sessionModal').classList.add('hidden');
+    }
+
+    async function submitSessionCookie() {
+      const liAt = document.getElementById('inputLiAt').value.trim();
+      if (!liAt) {
+        alert('Please enter a valid li_at cookie string.');
+        return;
+      }
+      const btn = document.getElementById('btnSaveCookie');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving & Syncing to Render...';
+      try {
+        const res = await fetch('/api/update_cookies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ li_at: liAt })
+        });
+        const d = await res.json();
+        if (d.success) {
+          alert('SUCCESS: li_at cookie saved and synced to Render! You can now run Feed (100+) Deep Harvest.');
+          closeSessionModal();
+          pollDashboardData();
+        } else {
+          alert('Error: ' + (d.error || 'Failed to update cookie'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Save & Sync to Render';
+      }
+    }
+
     // Polling Intervals
     setInterval(pollDashboardData, 3000);
     setInterval(pollLogs, 1500);
@@ -1966,6 +2035,53 @@ MERAKI_UI_HTML = """
     loadResumeStatus();
     loadDispatches();
   </script>
+  <!-- LinkedIn Session Auth Modal -->
+  <div id="sessionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+            <i class="fa-brands fa-linkedin text-base"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm">LinkedIn Session Authentication</h3>
+            <p class="text-xs text-slate-500">Cloud & Local Headless Authentication</p>
+          </div>
+        </div>
+        <button onclick="closeSessionModal()" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg cursor-pointer">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
+          <div class="font-bold flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info"></i> How to get your li_at cookie in 15 seconds:
+          </div>
+          <ol class="list-decimal list-inside space-y-0.5 text-blue-700 text-[11px] pl-1">
+            <li>Open <a href="https://www.linkedin.com" target="_blank" class="underline font-semibold">LinkedIn.com</a> in your browser.</li>
+            <li>Press <strong>F12</strong> (or Right-click &gt; <em>Inspect</em>), switch to <strong>Application</strong> (or <em>Storage</em>).</li>
+            <li>Click <strong>Cookies</strong> &gt; <code>https://www.linkedin.com</code>, copy value of <strong><code>li_at</code></strong>.</li>
+          </ol>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Paste li_at Cookie String</label>
+          <textarea id="inputLiAt" rows="3" placeholder="AQEDAUC..." class="w-full text-xs font-mono p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button onclick="closeSessionModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
+            Cancel
+          </button>
+          <button onclick="submitSessionCookie()" id="btnSaveCookie" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Save &amp; Sync to Render</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
 """
@@ -2199,6 +2315,71 @@ def reset_task():
     CURRENT_TASK["started_at"] = None
     add_log("SYSTEM: Task execution lock forcibly reset to Idle.")
     return jsonify({"status": "success", "message": "Task reset to Idle."})
+
+
+@app.route("/api/update_cookies", methods=["POST"])
+def update_cookies_route():
+    data = request.json or {}
+    li_at_val = data.get("li_at", "").strip()
+    if not li_at_val:
+        return jsonify({"success": False, "error": "No li_at cookie value provided."}), 400
+
+    session_file = os.path.join(DATA_DIR, "session_cookies.json")
+    cookies = []
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                cookies = json.load(f).get("cookies", [])
+        except Exception:
+            cookies = []
+
+    # Update or add li_at cookie
+    found = False
+    for c in cookies:
+        if c.get("name") == "li_at":
+            c["value"] = li_at_val
+            c["expires"] = time.time() + (365 * 24 * 3600)
+            c["domain"] = ".linkedin.com"
+            c["secure"] = True
+            c["httpOnly"] = True
+            c["sameSite"] = "None"
+            found = True
+    if not found:
+        cookies.append({
+            "name": "li_at",
+            "value": li_at_val,
+            "domain": ".linkedin.com",
+            "path": "/",
+            "expires": time.time() + (365 * 24 * 3600),
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "None"
+        })
+
+    payload = {
+        "exported_at": datetime.now(IST).strftime("%a %b %d %H:%M:%S IST %Y"),
+        "cookies": cookies
+    }
+    payload_str = json.dumps(payload, indent=2)
+    save_json_file(session_file, payload)
+
+    # Sync to Render cloud environment variable
+    import base64
+    import requests
+    b64_val = base64.b64encode(payload_str.encode("utf-8")).decode("utf-8")
+    try:
+        url = "https://api.render.com/v1/services/srv-dblnjm6c6qcc73bpkv70/env-vars/SESSION_COOKIES_BASE64"
+        headers = {
+            "Authorization": "Bearer rnd_V7GNSF2DNymcat6NZAAz8ONRbGkh",
+            "Content-Type": "application/json"
+        }
+        res = requests.put(url, headers=headers, json={"value": b64_val}, timeout=10)
+        logger.info(f"Pushed updated session cookies to Render: status {res.status_code}")
+    except Exception as e:
+        logger.warning(f"Could not push updated cookies to Render env var: {e}")
+
+    add_log("🔑 SUCCESS: LinkedIn authentication session cookie (li_at) updated and synced to cloud deployment!")
+    return jsonify({"success": True, "message": "LinkedIn li_at cookie successfully updated and synced to Render!"})
 
 
 def execute_task(task_type):

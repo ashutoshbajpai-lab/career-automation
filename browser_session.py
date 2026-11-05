@@ -117,6 +117,8 @@ class BrowserManager:
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-software-rasterizer",
+                "--in-process-gpu",
+                "--blink-settings=imagesEnabled=false",
                 "--renderer-process-limit=1",
                 "--disk-cache-size=1",
                 "--media-cache-size=1",

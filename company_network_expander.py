@@ -50,7 +50,7 @@ DEFAULT_MUMBAI_STARTUPS = [
 
 class CompanyNetworkExpander:
     def __init__(self, browser_mgr: BrowserManager = None):
-        self.browser_mgr = browser_mgr or BrowserManager()
+        self.browser_mgr = browser_mgr or BrowserManager(profile_name="linkedin")
         os.makedirs(DATA_DIR, exist_ok=True)
         self.referral_engine = ReferralEngine(self.browser_mgr)
 

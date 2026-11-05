@@ -51,7 +51,7 @@ def get_templates() -> dict:
 
 class ReferralEngine:
     def __init__(self, browser_mgr: BrowserManager = None):
-        self.browser_mgr = browser_mgr or BrowserManager()
+        self.browser_mgr = browser_mgr or BrowserManager(profile_name="linkedin")
         os.makedirs(DATA_DIR, exist_ok=True)
 
     def search_company_people(self, company: str, role: str = "Recruiter", prioritize_alumni: bool = True, limit: int = 15) -> list:

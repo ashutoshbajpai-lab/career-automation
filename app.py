@@ -2136,14 +2136,18 @@ def upload_resume_route():
     sync_naukri = request.form.get("sync_naukri") == "true"
     naukri_msg = "Not requested"
     if sync_naukri:
-        try:
-            naukri = NaukriAutomator()
-            res = naukri.upload_resume(target_path)
-            naukri_msg = res.get("message", "Uploaded to Naukri")
-            add_log(f"SUCCESS: Synced new resume '{filename}' to Naukri.com")
-        except Exception as e:
-            naukri_msg = f"Naukri sync error: {e}"
-            add_log(f"WARNING: Naukri resume upload error: {e}")
+        if CURRENT_TASK["running"]:
+            naukri_msg = f"Task '{CURRENT_TASK['name']}' currently running. Resume saved; Naukri sync will trigger when idle."
+            add_log(f"NOTICE: Resume '{filename}' saved. Naukri sync deferred because '{CURRENT_TASK['name']}' is running.")
+        else:
+            try:
+                naukri = NaukriAutomator()
+                res = naukri.upload_resume(target_path)
+                naukri_msg = res.get("message", "Uploaded to Naukri")
+                add_log(f"SUCCESS: Synced new resume '{filename}' to Naukri.com")
+            except Exception as e:
+                naukri_msg = f"Naukri sync notice: {e}"
+                add_log(f"NOTICE: Naukri resume upload notice: {e}")
 
     add_log(f"SUCCESS: Uploaded and set active master resume: {filename}")
     return jsonify({
@@ -2215,10 +2219,10 @@ def execute_task(task_type):
             # 3. LinkedIn Feed Harvester & Leads Dispatcher
             add_log("[3/6] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
             try:
-                mgr = BrowserManager()
+                mgr = BrowserManager(profile_name="linkedin")
                 try:
                     context, page = mgr.get_context_and_page(force_headless=True)
-                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 50}})
+                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 100}})
                     state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                     harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
                     new_leads = harvester.run()
@@ -2233,7 +2237,7 @@ def execute_task(task_type):
             # 4. LinkedIn Job Scanner & Easy Apply
             add_log("[4/6] Launching LinkedIn Easy Apply & Job Scanner...")
             try:
-                mgr = BrowserManager()
+                mgr = BrowserManager(profile_name="linkedin")
                 try:
                     context, page = mgr.get_context_and_page(force_headless=True)
                     config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
@@ -2300,7 +2304,7 @@ def execute_task(task_type):
 
         elif task_type == "linkedin_apply":
             add_log("🚀 Starting LinkedIn Easy Apply & Job Scanner...")
-            mgr = BrowserManager()
+            mgr = BrowserManager(profile_name="linkedin")
             try:
                 context, page = mgr.get_context_and_page(force_headless=True)
                 config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
@@ -2322,11 +2326,11 @@ def execute_task(task_type):
                 mgr.close()
 
         elif task_type == "linkedin_feed":
-            add_log("🚀 Starting LinkedIn Feed Harvester...")
-            mgr = BrowserManager()
+            add_log("🚀 Starting LinkedIn Feed Harvester (Target: 100+ Posts)...")
+            mgr = BrowserManager(profile_name="linkedin")
             try:
                 context, page = mgr.get_context_and_page(force_headless=True)
-                config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 50}})
+                config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 100}})
                 state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                 harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
                 new_leads = harvester.run()

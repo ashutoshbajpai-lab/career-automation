@@ -19,7 +19,7 @@
   "dry_run": false,
   "test_mode": false,
   "limits": {
-    "max_feed_posts_per_run": 50,
+    "max_feed_posts_per_run": 100,
     "max_jobs_evaluated_per_run": 50,
     "max_easy_applies_per_run": 25,
     "max_easy_applies_per_day": 150,

@@ -26,7 +26,7 @@ PASSED_OPPORTUNITIES_JSON = os.path.join(DATA_DIR, "screening_passed_opportuniti
 
 class EmailTracker:
     def __init__(self, browser_mgr: BrowserManager = None):
-        self.browser_mgr = browser_mgr or BrowserManager()
+        self.browser_mgr = browser_mgr or BrowserManager(profile_name="gmail")
         os.makedirs(DATA_DIR, exist_ok=True)
 
     def scan_full_inbox(self) -> list:

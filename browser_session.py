@@ -10,6 +10,7 @@ import time
 import json
 import random
 import logging
+import threading
 from playwright.sync_api import sync_playwright
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 CDP_URL = "http://localhost:9222"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROFILE_DIR = os.path.join(BASE_DIR, "chrome_profile")
+BROWSER_LOCK = threading.Lock()
 
 
 def human_delay(min_sec: float = 2.0, max_sec: float = 4.5):
@@ -40,11 +42,13 @@ def smooth_scroll(page, total_pixels: int = 1000, steps: int = 4):
 
 
 class BrowserManager:
-    def __init__(self):
+    def __init__(self, profile_name: str = "default"):
         self.playwright = None
         self.browser = None
         self.context = None
         self.is_cdp = False
+        self.profile_name = profile_name
+        self.has_lock = False
 
     def get_context_and_page(self, force_headless: bool = None):
         self.playwright = sync_playwright().start()
@@ -66,17 +70,23 @@ class BrowserManager:
         except Exception:
             logger.info("Chrome port 9222 not available. Using persistent automation profile.")
 
-        # Method 2: Launch persistent browser context with real Chrome binary
-        os.makedirs(PROFILE_DIR, exist_ok=True)
+        # Method 2: Launch persistent browser context with isolated profile per platform
+        target_profile_dir = PROFILE_DIR if self.profile_name == "default" else os.path.join(BASE_DIR, f"chrome_profile_{self.profile_name}")
+        os.makedirs(target_profile_dir, exist_ok=True)
         
         # Clean up stale singleton lock if process is dead
         for lock_file in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-            lp = os.path.join(PROFILE_DIR, lock_file)
+            lp = os.path.join(target_profile_dir, lock_file)
             if os.path.exists(lp) or os.path.islink(lp):
                 try:
                     os.unlink(lp)
                 except Exception:
                     pass
+
+        # Concurrency safety: acquire execution lock with fast 5s timeout instead of hanging 180s
+        if not BROWSER_LOCK.acquire(timeout=5):
+            raise RuntimeError(f"Browser is busy with another active task. Deferred '{self.profile_name}' operation.")
+        self.has_lock = True
 
         chrome_executable = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
         
@@ -92,7 +102,7 @@ class BrowserManager:
                 is_headless = True  # Lean, high-performance default for LinkedIn & cloud
 
         launch_kwargs = {
-            "user_data_dir": PROFILE_DIR,
+            "user_data_dir": target_profile_dir,
             "headless": is_headless,
             "viewport": {"width": 1280, "height": 800},
             "ignore_default_args": ["--enable-automation"],
@@ -117,7 +127,7 @@ class BrowserManager:
         if os.path.exists(chrome_executable):
             launch_kwargs["executable_path"] = chrome_executable
 
-        logger.info(f"Launching Playwright context (headless={is_headless}, DISPLAY={os.environ.get('DISPLAY', 'None')})...")
+        logger.info(f"Launching Playwright context (profile={self.profile_name}, headless={is_headless}, DISPLAY={os.environ.get('DISPLAY', 'None')})...")
         self.context = self.playwright.chromium.launch_persistent_context(**launch_kwargs)
 
         # Automatically inject session cookies if present
@@ -190,5 +200,11 @@ class BrowserManager:
             self.browser = None
             self.context = None
             self.playwright = None
+            if self.has_lock:
+                try:
+                    BROWSER_LOCK.release()
+                except Exception:
+                    pass
+                self.has_lock = False
             import gc
             gc.collect()

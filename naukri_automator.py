@@ -27,7 +27,7 @@ MANUAL_CSV = os.path.join(DATA_DIR, "manual_applications.csv")
 
 class NaukriAutomator:
     def __init__(self, browser_mgr: BrowserManager = None):
-        self.browser_mgr = browser_mgr or BrowserManager()
+        self.browser_mgr = browser_mgr or BrowserManager(profile_name="naukri")
         os.makedirs(DATA_DIR, exist_ok=True)
 
     def boost_profile(self) -> dict:

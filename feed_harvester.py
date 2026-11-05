@@ -76,12 +76,16 @@ class FeedHarvester:
             self._log(f"⚠️ LinkedIn requires authentication / checkpoint: {current_url}")
             return []
 
-        # Multi-pass continuous scrolling with incremental card collection
-        self._log("Scrolling feed deeply across 10 scroll passes & expanding posts...")
+        target_posts = int(self.config.get("limits", {}).get("max_feed_posts_per_run", 100))
+        if target_posts < 100:
+            target_posts = 100
+
+        self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
         seen_card_hashes = set()
         raw_items = []
+        max_scroll_passes = 28
 
-        for scroll_i in range(1, 11):
+        for scroll_i in range(1, max_scroll_passes + 1):
             # 1. Expand all '...see more' buttons currently visible in the DOM
             try:
                 self.page.evaluate('''() => {
@@ -120,19 +124,26 @@ class FeedHarvester:
             except Exception:
                 pass
 
+            if len(raw_items) >= target_posts:
+                self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
+                break
+
+            if scroll_i % 4 == 0:
+                self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Extracted {len(raw_items)} distinct posts so far...")
+
             # 3. Authentic input-driven scrolling to trigger LinkedIn infinite scroll loader
             try:
                 self.page.mouse.wheel(0, 1100)
                 self.page.keyboard.press("PageDown")
-                human_delay(1.5, 2.2)
+                human_delay(1.0, 1.6)
             except Exception:
                 try:
                     self.page.evaluate("window.scrollBy(0, 1000);")
-                    human_delay(1.5, 2.0)
+                    human_delay(1.0, 1.5)
                 except Exception:
                     pass
 
-        self._log(f"Analyzed feed: Loaded {len(raw_items)} distinct post cards across 10 scroll passes. Filtering for opportunities...")
+        self._log(f"Analyzed feed: Successfully extracted {len(raw_items)} distinct post cards. Filtering for opportunities...")
 
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []

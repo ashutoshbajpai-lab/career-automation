@@ -30,7 +30,11 @@ from browser_session import BrowserManager
 from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
-from recruitment_dispatcher import sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON, dismiss_pending_form, clear_all_pending_forms, dismiss_recruiter_lead
+from recruitment_dispatcher import (
+    sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON, 
+    dismiss_pending_form, clear_all_pending_forms, dismiss_recruiter_lead,
+    dismiss_pending_forms_batch, dismiss_recruiter_leads_batch
+)
 from company_network_expander import CompanyNetworkExpander
 from feed_harvester import FeedHarvester
 from job_scanner import JobScanner
@@ -730,6 +734,10 @@ MERAKI_UI_HTML = """
               <p class="text-xs text-slate-400">Hiring vacancy posts containing direct Google Forms or Typeforms. Saved here for your manual application.</p>
             </div>
             <div class="flex items-center gap-2">
+              <button id="btnDeleteSelectedForms" onclick="deleteSelectedForms()" class="hidden px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Delete Selected (<span id="selectedFormsCount">0</span>)</span>
+              </button>
               <button onclick="clearAllPendingForms()" title="Clear all pending forms from desk" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-200 transition cursor-pointer">
                 <i class="fa-solid fa-trash-can text-xs"></i>
                 <span>Clear All</span>
@@ -745,15 +753,16 @@ MERAKI_UI_HTML = """
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
+                  <th class="p-3 w-8"><input type="checkbox" id="selectAllForms" onchange="toggleSelectAllForms(this)" class="rounded text-teal-600 cursor-pointer"></th>
                   <th class="p-3">Detected</th>
                   <th class="p-3">Poster / Company</th>
-                  <th class="p-3">Context / Hiring Details</th>
+                  <th class="p-3">Context &amp; Tags</th>
                   <th class="p-3">Status</th>
                   <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="pendingFormsTableBody">
-                <tr><td colspan="5" class="p-6 text-center text-slate-400">Loading pending forms...</td></tr>
+                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading pending forms...</td></tr>
               </tbody>
             </table>
           </div>
@@ -773,21 +782,28 @@ MERAKI_UI_HTML = """
               </h3>
               <p class="text-xs text-slate-400">Direct recruiter emails extracted from vacancy posts with pre-crafted referral applications ready to send.</p>
             </div>
+            <div class="flex items-center gap-2">
+              <button id="btnDeleteSelectedRecruiters" onclick="deleteSelectedRecruiters()" class="hidden px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Delete Selected (<span id="selectedRecruitersCount">0</span>)</span>
+              </button>
+            </div>
           </div>
 
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
+                  <th class="p-3 w-8"><input type="checkbox" id="selectAllRecruiters" onchange="toggleSelectAllRecruiters(this)" class="rounded text-indigo-600 cursor-pointer"></th>
                   <th class="p-3">Detected</th>
                   <th class="p-3">Recruiter / Author</th>
                   <th class="p-3">Recruiter Email</th>
-                  <th class="p-3">Draft Application Preview</th>
+                  <th class="p-3">Draft Application &amp; Tags</th>
                   <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="recruiterLeadsTableBody">
-                <tr><td colspan="5" class="p-6 text-center text-slate-400">Loading recruiter leads...</td></tr>
+                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading recruiter leads...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1474,46 +1490,98 @@ MERAKI_UI_HTML = """
         if (!tbody) return;
 
         if (!d.forms || !d.forms.length) {
-          tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No application forms pending.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No application forms pending.</td></tr>`;
+          updateSelectedFormsCount();
           return;
         }
 
-        tbody.innerHTML = d.forms.map(f => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
-            <td class="p-3 font-bold text-slate-900">
-              <div class="text-sm font-bold text-slate-900">${f.poster}</div>
-              <a href="${f.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open original post on LinkedIn">
-                <i class="fa-brands fa-linkedin text-blue-600"></i>
-                <span>Source Post ↗</span>
-              </a>
-            </td>
-            <td class="p-3 text-slate-600 max-w-md truncate" title="${f.context}">${f.context}</td>
-            <td class="p-3">
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status}</span>
-            </td>
-            <td class="p-3 text-right whitespace-nowrap">
-              <div class="inline-flex items-center gap-1.5 justify-end">
-                <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post where this form was shared"
-                   class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
-                  <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
-                  <span>View Source Post ↗</span>
+        tbody.innerHTML = d.forms.map(f => {
+          const tags = f.tags || ['Recruiting (0-2 Yrs)'];
+          const tagsHtml = tags.map(t => {
+            const isComment = t.includes('Comment');
+            return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isComment ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${t}</span>`;
+          }).join(' ');
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="p-3">
+                <input type="checkbox" class="form-checkbox-item rounded text-teal-600 cursor-pointer" value="${f.id}" onchange="updateSelectedFormsCount()">
+              </td>
+              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
+              <td class="p-3 font-bold text-slate-900">
+                <div class="text-sm font-bold text-slate-900">${f.poster}</div>
+                <a href="${f.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open original post on LinkedIn">
+                  <i class="fa-brands fa-linkedin text-blue-600"></i>
+                  <span>Source Post ↗</span>
                 </a>
-                <a href="${f.form_url}" target="_blank"
-                   class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
-                  <span>Open &amp; Fill Form</span>
-                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                </a>
-                <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
-                        class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
-                  <i class="fa-solid fa-trash-can text-xs"></i>
-                  <span>Remove</span>
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
+              </td>
+              <td class="p-3 text-slate-600 max-w-md">
+                <div class="flex items-center gap-1 flex-wrap mb-1">${tagsHtml}</div>
+                <div class="truncate text-xs text-slate-600" title="${f.context}">${f.context}</div>
+              </td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status}</span>
+              </td>
+              <td class="p-3 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1.5 justify-end">
+                  <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post where this form was shared"
+                     class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
+                    <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
+                    <span>View Source Post ↗</span>
+                  </a>
+                  <a href="${f.form_url}" target="_blank"
+                     class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
+                    <span>Open &amp; Fill Form</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                  </a>
+                  <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
+                          class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                    <span>Remove</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        updateSelectedFormsCount();
       } catch (e) {}
+    }
+
+    function toggleSelectAllForms(master) {
+      document.querySelectorAll('.form-checkbox-item').forEach(cb => cb.checked = master.checked);
+      updateSelectedFormsCount();
+    }
+
+    function updateSelectedFormsCount() {
+      const selected = Array.from(document.querySelectorAll('.form-checkbox-item:checked')).map(cb => cb.value);
+      const btn = document.getElementById('btnDeleteSelectedForms');
+      const countSpan = document.getElementById('selectedFormsCount');
+      if (countSpan) countSpan.innerText = selected.length;
+      if (btn) {
+        if (selected.length > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+      }
+    }
+
+    async function deleteSelectedForms() {
+      const selected = Array.from(document.querySelectorAll('.form-checkbox-item:checked')).map(cb => cb.value);
+      if (!selected.length) return;
+      if (!confirm(`Delete ${selected.length} selected pending forms from your desk?`)) return;
+      try {
+        const res = await fetch('/api/pending_forms/delete_batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: selected })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadPendingForms();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
     }
 
     // Recruiter Leads
@@ -1525,49 +1593,96 @@ MERAKI_UI_HTML = """
         if (!tbody) return;
 
         if (!d.emails || !d.emails.length) {
-          tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No recruiter leads harvested yet.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No recruiter leads harvested yet.</td></tr>`;
+          updateSelectedRecruitersCount();
           return;
         }
 
-        tbody.innerHTML = d.emails.map(e => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${e.timestamp}</td>
-            <td class="p-3 font-bold text-slate-900">
-              <div class="text-sm font-bold text-slate-900">${e.recipient_name}</div>
-              <a href="${e.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open source LinkedIn post in new tab">
-                <i class="fa-brands fa-linkedin text-blue-600"></i>
-                <span>Source Post ↗</span>
-              </a>
-            </td>
-            <td class="p-3 font-semibold text-indigo-600">${e.email}</td>
-            <td class="p-3 text-slate-600 max-w-sm truncate" title="${e.draft_body}">
-              <div class="font-medium text-slate-800 text-xs">${e.subject}</div>
-              <div class="text-[11px] text-slate-400 truncate">${e.draft_body.slice(0, 80)}...</div>
-            </td>
-            <td class="p-3 text-right whitespace-nowrap">
-              <div class="inline-flex items-center gap-1.5 justify-end">
-                <a href="${e.post_url}" target="_blank" title="View the original LinkedIn post where this recruiter email was shared"
-                   class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
-                  <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
-                  <span>View Source Post ↗</span>
+        tbody.innerHTML = d.emails.map(e => {
+          const tags = e.tags || ['Recruiting (0-2 Yrs)'];
+          const tagsHtml = tags.map(t => `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${t}</span>`).join(' ');
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="p-3">
+                <input type="checkbox" class="recruiter-checkbox-item rounded text-indigo-600 cursor-pointer" value="${e.id}" onchange="updateSelectedRecruitersCount()">
+              </td>
+              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${e.timestamp}</td>
+              <td class="p-3 font-bold text-slate-900">
+                <div class="text-sm font-bold text-slate-900">${e.recipient_name}</div>
+                <a href="${e.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open source LinkedIn post in new tab">
+                  <i class="fa-brands fa-linkedin text-blue-600"></i>
+                  <span>Source Post ↗</span>
                 </a>
-                <a href="${e.gmail_web_link}" target="_blank"
-                   class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20">
-                  <i class="fa-solid fa-envelope"></i>
-                  <span>Send via Gmail</span>
-                </a>
-                <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
-                  <i class="fa-solid fa-paper-plane"></i>
-                </a>
-                <button onclick="removeRecruiterLead('${e.id}')" title="Dismiss / Remove this recruiter lead"
-                        class="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs transition cursor-pointer">
-                  <i class="fa-solid fa-trash-can text-xs"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
+              </td>
+              <td class="p-3 font-semibold text-indigo-600">${e.email}</td>
+              <td class="p-3 text-slate-600 max-w-sm">
+                <div class="flex items-center gap-1 flex-wrap mb-1">${tagsHtml}</div>
+                <div class="font-medium text-slate-800 text-xs">${e.subject}</div>
+                <div class="text-[11px] text-slate-400 truncate">${e.draft_body.slice(0, 80)}...</div>
+              </td>
+              <td class="p-3 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1.5 justify-end">
+                  <a href="${e.post_url}" target="_blank" title="View the original LinkedIn post where this recruiter email was shared"
+                     class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
+                    <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
+                    <span>View Source Post ↗</span>
+                  </a>
+                  <a href="${e.gmail_web_link}" target="_blank"
+                     class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20">
+                    <i class="fa-solid fa-envelope"></i>
+                    <span>Send via Gmail</span>
+                  </a>
+                  <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </a>
+                  <button onclick="removeRecruiterLead('${e.id}')" title="Dismiss / Remove this recruiter lead"
+                          class="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs transition cursor-pointer">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        updateSelectedRecruitersCount();
       } catch (e) {}
+    }
+
+    function toggleSelectAllRecruiters(master) {
+      document.querySelectorAll('.recruiter-checkbox-item').forEach(cb => cb.checked = master.checked);
+      updateSelectedRecruitersCount();
+    }
+
+    function updateSelectedRecruitersCount() {
+      const selected = Array.from(document.querySelectorAll('.recruiter-checkbox-item:checked')).map(cb => cb.value);
+      const btn = document.getElementById('btnDeleteSelectedRecruiters');
+      const countSpan = document.getElementById('selectedRecruitersCount');
+      if (countSpan) countSpan.innerText = selected.length;
+      if (btn) {
+        if (selected.length > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+      }
+    }
+
+    async function deleteSelectedRecruiters() {
+      const selected = Array.from(document.querySelectorAll('.recruiter-checkbox-item:checked')).map(cb => cb.value);
+      if (!selected.length) return;
+      if (!confirm(`Delete ${selected.length} selected recruiter leads from your desk?`)) return;
+      try {
+        const res = await fetch('/api/recruiter_leads/delete_batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: selected })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadRecruiterLeads();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
     }
 
     // Naukri Auto-Applied Jobs Desk
@@ -2343,6 +2458,18 @@ def clear_all_pending_forms_route():
     return jsonify({"success": True, "cleared_count": cleared})
 
 
+@app.route("/api/pending_forms/delete_batch", methods=["POST"])
+def delete_pending_forms_batch_route():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "error": "No IDs provided"}), 400
+    removed = dismiss_pending_forms_batch(ids)
+    res = sync_leads()
+    add_log(f"🗑️ Removed {removed} selected application forms from desk.")
+    return jsonify({"success": True, "removed_count": removed, "remaining_count": len(res.get("forms", []))})
+
+
 @app.route("/api/recruiter_leads")
 def recruiter_leads():
     res = sync_leads()
@@ -2360,6 +2487,18 @@ def remove_recruiter_lead_route():
     res = sync_leads()
     add_log(f"🗑️ Recruiter lead {lead_id or email} removed from desk.")
     return jsonify({"success": True, "remaining_count": len(res.get("emails", []))})
+
+
+@app.route("/api/recruiter_leads/delete_batch", methods=["POST"])
+def delete_recruiter_leads_batch_route():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "error": "No IDs provided"}), 400
+    removed = dismiss_recruiter_leads_batch(ids)
+    res = sync_leads()
+    add_log(f"🗑️ Removed {removed} selected recruiter leads from desk.")
+    return jsonify({"success": True, "removed_count": removed, "remaining_count": len(res.get("emails", []))})
 
 
 @app.route("/api/crawl_company", methods=["POST"])

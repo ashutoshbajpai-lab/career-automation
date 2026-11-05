@@ -29,8 +29,5 @@ else
     unset DISPLAY
 fi
 
-echo "--> Initializing Cloud Session Cookies..."
-python3 import_session.py || true
-
 echo "--> Launching Careercommand with Integrated 10h Shift Scheduler on Port ${PORT:-5055}..."
-python3 app.py
+exec python3 app.py

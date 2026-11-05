@@ -109,6 +109,7 @@ def sync_leads():
         preview = post.get("preview", "")
         timestamp = post.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         post_url = post.get("post_url", "").strip()
+        post_tags = post.get("tags", ["Recruiting (0-2 Yrs)"])
 
         # Clean author name from preview if needed
         author = raw_author
@@ -142,6 +143,7 @@ def sync_leads():
                         "poster": author,
                         "form_url": form_url,
                         "post_url": post_url,
+                        "tags": post_tags,
                         "context": preview[:180],
                         "status": "Pending Manual Fill"
                     })
@@ -155,6 +157,7 @@ def sync_leads():
                         "poster": author,
                         "form_url": link,
                         "post_url": post_url,
+                        "tags": post_tags,
                         "context": preview[:180],
                         "status": "Pending Manual Fill"
                     })
@@ -247,6 +250,7 @@ def sync_leads():
                         "mailto_link": mailto,
                         "gmail_web_link": gmail_web_link,
                         "post_url": recruiter_post_url,
+                        "tags": post_tags,
                         "status": "Draft Prepared",
                         "context": preview[:180]
                     })
@@ -341,7 +345,135 @@ def clear_all_pending_forms() -> int:
     return count
 
 
+def dismiss_pending_forms_batch(form_ids: list) -> int:
+    """Removes multiple pending forms by their IDs and blacklists them from reappearing."""
+    if not form_ids:
+        return 0
+    os.makedirs(DATA_DIR, exist_ok=True)
+    id_set = set(str(i) for i in form_ids)
+
+    pending_forms = []
+    if os.path.exists(PENDING_FORMS_JSON):
+        try:
+            with open(PENDING_FORMS_JSON, "r", encoding="utf-8") as f:
+                pending_forms = json.load(f)
+        except Exception:
+            pending_forms = []
+
+    dismissed_forms = set()
+    if os.path.exists(DISMISSED_FORMS_JSON):
+        try:
+            with open(DISMISSED_FORMS_JSON, "r", encoding="utf-8") as f:
+                dismissed_forms = set(json.load(f))
+        except Exception:
+            pass
+
+    remaining = []
+    removed_count = 0
+    for item in pending_forms:
+        if str(item.get("id")) in id_set:
+            removed_count += 1
+            if item.get("form_url"):
+                dismissed_forms.add(item.get("form_url"))
+            if item.get("id"):
+                dismissed_forms.add(str(item.get("id")))
+        else:
+            remaining.append(item)
+
+    with open(PENDING_FORMS_JSON, "w", encoding="utf-8") as f:
+        json.dump(remaining, f, indent=2)
+
+    with open(DISMISSED_FORMS_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed_forms), f, indent=2)
+
+    return removed_count
+
+
 def dismiss_recruiter_lead(lead_id: str = None, email: str = None) -> bool:
+    """Removes a recruiter email lead and blacklists it from reappearing."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    recruiter_leads = []
+    if os.path.exists(RECRUITER_LEADS_JSON):
+        try:
+            with open(RECRUITER_LEADS_JSON, "r", encoding="utf-8") as f:
+                recruiter_leads = json.load(f)
+        except Exception:
+            recruiter_leads = []
+
+    dismissed_emails = set()
+    if os.path.exists(DISMISSED_RECRUITERS_JSON):
+        try:
+            with open(DISMISSED_RECRUITERS_JSON, "r", encoding="utf-8") as f:
+                dismissed_emails = set(json.load(f))
+        except Exception:
+            pass
+
+    remaining = []
+    for item in recruiter_leads:
+        if (lead_id and str(item.get("id")) == str(lead_id)) or (email and item.get("email") == email):
+            if item.get("email"):
+                dismissed_emails.add(item.get("email"))
+            if item.get("id"):
+                dismissed_emails.add(str(item.get("id")))
+        else:
+            remaining.append(item)
+
+    if email:
+        dismissed_emails.add(email)
+    if lead_id:
+        dismissed_emails.add(str(lead_id))
+
+    with open(RECRUITER_LEADS_JSON, "w", encoding="utf-8") as f:
+        json.dump(remaining, f, indent=2)
+
+    with open(DISMISSED_RECRUITERS_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed_emails), f, indent=2)
+
+    return True
+
+
+def dismiss_recruiter_leads_batch(lead_ids: list) -> int:
+    """Removes multiple recruiter leads by their IDs and blacklists them from reappearing."""
+    if not lead_ids:
+        return 0
+    os.makedirs(DATA_DIR, exist_ok=True)
+    id_set = set(str(i) for i in lead_ids)
+
+    recruiter_leads = []
+    if os.path.exists(RECRUITER_LEADS_JSON):
+        try:
+            with open(RECRUITER_LEADS_JSON, "r", encoding="utf-8") as f:
+                recruiter_leads = json.load(f)
+        except Exception:
+            recruiter_leads = []
+
+    dismissed_emails = set()
+    if os.path.exists(DISMISSED_RECRUITERS_JSON):
+        try:
+            with open(DISMISSED_RECRUITERS_JSON, "r", encoding="utf-8") as f:
+                dismissed_emails = set(json.load(f))
+        except Exception:
+            pass
+
+    remaining = []
+    removed_count = 0
+    for item in recruiter_leads:
+        if str(item.get("id")) in id_set:
+            removed_count += 1
+            if item.get("email"):
+                dismissed_emails.add(item.get("email"))
+            if item.get("id"):
+                dismissed_emails.add(str(item.get("id")))
+        else:
+            remaining.append(item)
+
+    with open(RECRUITER_LEADS_JSON, "w", encoding="utf-8") as f:
+        json.dump(remaining, f, indent=2)
+
+    with open(DISMISSED_RECRUITERS_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed_emails), f, indent=2)
+
+    return removed_count
     """Removes a recruiter email lead and blacklists it from reappearing."""
     os.makedirs(DATA_DIR, exist_ok=True)
     recruiter_leads = []

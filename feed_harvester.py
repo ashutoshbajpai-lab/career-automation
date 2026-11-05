@@ -157,15 +157,43 @@ class FeedHarvester:
                                 }
                             }
                             if (!postPermalink) {
+                                const menuBtn = card.querySelector('button.feed-shared-control-menu__trigger, button[aria-label*="Control menu for update"], button[aria-label*="More actions"], button[aria-label*="share"]');
+                                if (menuBtn) {
+                                    const aria = menuBtn.getAttribute('aria-label') || '';
+                                    const m = aria.match(/urn:li:(?:activity|ugcPost|share):[0-9]+/);
+                                    if (m) postPermalink = `https://www.linkedin.com/feed/update/${m[0]}/`;
+                                }
+                            }
+                            if (!postPermalink) {
                                 const foundLink = links.find(h => h.includes('/feed/update/urn:li:') || h.includes('/posts/'));
                                 if (foundLink) postPermalink = foundLink.split('?')[0];
                             }
+
+                            // Check for "link in comment" / "pinned in comment"
+                            const commentTriggers = ['link in comment', 'links in comment', 'form in comment', 'pinned in comment', 'pinned comment', 'link below in comment', 'apply in comment'];
+                            const lower = rawText.toLowerCase();
+                            let commentLinks = [];
+                            if (commentTriggers.some(k => lower.includes(k))) {
+                                try {
+                                    const cBtn = card.querySelector('button[aria-label*="Comment"], button.comment-button, button.show-prev-comments');
+                                    if (cBtn) cBtn.click();
+                                } catch(e) {}
+                            }
+                            const commentEls = Array.from(card.querySelectorAll('.comments-comment-item, .comments-comments-list__comment-item, div[data-comment-id], .feed-shared-comment-item'));
+                            commentEls.forEach(c => {
+                                Array.from(c.querySelectorAll('a')).forEach(a => {
+                                    if (a.href && a.href.startsWith('http') && !a.href.includes('linkedin.com/in/')) {
+                                        commentLinks.push(a.href);
+                                    }
+                                });
+                            });
 
                             results.push({
                                 text: rawText,
                                 author: authorName,
                                 post_url: postPermalink,
-                                links: links
+                                links: links,
+                                comment_links: commentLinks
                             });
                         }
                     });
@@ -226,8 +254,17 @@ class FeedHarvester:
             form_links = []
             external_links = []
             post_url = item.get("post_url", "")
+            tags = []
 
-            for href_raw in item.get("links", []):
+            # Process links in post body and links in comments
+            all_raw_links = list(item.get("links", []))
+            comment_links = list(item.get("comment_links", []))
+            if comment_links:
+                for cl in comment_links:
+                    if cl not in all_raw_links:
+                        all_raw_links.append(cl)
+
+            for href_raw in all_raw_links:
                 href = extract_real_url(href_raw)
                 if not href or "linkedin.com/in/" in href or "linkedin.com/article" in href:
                     continue
@@ -240,8 +277,12 @@ class FeedHarvester:
                 if any(domain in href.lower() for domain in FORM_DOMAINS):
                     if href not in form_links:
                         form_links.append(href)
+                        if href_raw in comment_links:
+                            tags.append("Comment Link Extracted")
                 elif href.startswith("http") and href not in external_links:
                     external_links.append(href)
+                    if href_raw in comment_links:
+                        tags.append("Comment Link Extracted")
 
             # Check text directly for form links
             for domain in FORM_DOMAINS:
@@ -250,6 +291,17 @@ class FeedHarvester:
                     clean_m = m.strip("),.>")
                     if clean_m not in form_links:
                         form_links.append(clean_m)
+
+            # Check for senior experience disqualifier (e.g. 4+ yrs, 5+ yrs) unless junior/fresher terms present
+            has_junior = any(k in text_lower for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst"])
+            has_senior = any(k in text_lower for k in ["4+ years", "5+ years", "6+ years", "5-8 years", "7+ years", "8+ years", "10+ years", "senior manager", "principal", "director", "vp"])
+            if has_senior and not has_junior:
+                continue
+
+            if has_junior:
+                tags.append("Recruiting (0-2 Yrs)")
+            else:
+                tags.append("Recruiting")
 
             # Extract Author from element metadata or text header
             author = item.get("author", "").strip()
@@ -298,6 +350,7 @@ class FeedHarvester:
                     "form_links": ", ".join(form_links),
                     "hyperlinks": ", ".join(external_links[:3]),
                     "post_url": post_url,
+                    "tags": tags,
                     "preview": text[:200].replace("\n", " ").strip(),
                     "id": hash_id
                 }

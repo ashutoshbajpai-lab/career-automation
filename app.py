@@ -26,6 +26,7 @@ from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
 from recruitment_dispatcher import sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON
+from company_network_expander import CompanyNetworkExpander
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("MerakiApp")
@@ -295,36 +296,55 @@ MERAKI_UI_HTML = """
       </div>
 
       <!-- Quick Manual Triggers Row -->
-      <div class="flex items-center space-x-2.5">
+      <div class="flex items-center space-x-2">
         <!-- MASTER 1-CLICK AUTOPILOT BUTTON -->
-        <button onclick="triggerMasterRunAll()" title="Launch ALL Operations (Naukri Boost, 50+ Apply, LinkedIn Easy Apply, Feed Harvester, Gmail Sweep, Resume Dispatcher)"
-                class="bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-extrabold text-xs py-2 px-4 rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/30 animate-pulse hover:animate-none cursor-pointer">
+        <button onclick="triggerMasterRunAll()" title="Single Button: Naukri Update & 50+ Apply, LinkedIn Easy Apply, Feed Harvester, and Mumbai Startups Connection Requests (No Note)"
+                class="bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30 animate-pulse hover:animate-none cursor-pointer">
           <i class="fa-solid fa-bolt-lightning text-amber-300"></i>
           <span>RUN EVERYTHING</span>
         </button>
 
+        <!-- SEPARATE DEDICATED MESSAGING BUTTON -->
+        <button onclick="triggerAction('send_messages')" title="Send Referral Messages & Notes to Approved Connections (SEPARATE from Connection Requests)"
+                class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-purple-600/30 cursor-pointer">
+          <i class="fa-solid fa-comments text-purple-200"></i>
+          <span>Send Messages</span>
+        </button>
+
+        <!-- STANDALONE COMPANY & STARTUP CONNECTIONS (NO NOTE) -->
+        <button onclick="triggerAction('company_connect')" title="Search Mumbai Companies & Startups: check Jobs section, send Connection Requests Only (No Note)"
+                class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
+          <i class="fa-solid fa-building text-sky-600"></i>
+          <span>Connect Startups</span>
+        </button>
+
         <button onclick="triggerAction('naukri_boost')" title="Toggle Profile Summary for 'Updated Today'"
-                class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1.5">
+                class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
           <i class="fa-solid fa-bolt text-amber-500"></i>
           <span>Boost</span>
         </button>
         <button onclick="triggerAction('naukri_apply')" title="Execute 50+ Mass Apply on Naukri"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-1.5 px-3.5 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/30">
+                class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1 shadow-sm shadow-indigo-600/30">
           <i class="fa-solid fa-rocket"></i>
-          <span>Naukri (50+)</span>
+          <span>Naukri 50+</span>
+        </button>
+        <button onclick="triggerAction('linkedin_apply')" title="Execute LinkedIn Easy Apply for Analyst/PM"
+                class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
+          <i class="fa-brands fa-linkedin text-blue-600"></i>
+          <span>Easy Apply</span>
         </button>
         <button onclick="triggerAction('linkedin_feed')" title="Harvest Feed for Hiring Posts & Forms"
-                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1.5">
+                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
           <i class="fa-solid fa-rss text-indigo-500"></i>
           <span>Feed</span>
         </button>
         <button onclick="triggerAction('scan_gmail')" title="Scan Full Inbox for Application Updates"
-                class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1.5">
+                class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1">
           <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
           <span>Gmail</span>
         </button>
         
-        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-indigo-500/20 ml-2">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-indigo-500/20 ml-1">
           AB
         </div>
       </div>
@@ -345,18 +365,27 @@ MERAKI_UI_HTML = """
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
                 <span class="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping"></span> Master One-Click Autopilot
               </span>
-              <span class="text-xs text-indigo-300 font-medium">All 6 Operations Coordinated</span>
+              <span class="text-xs text-emerald-300 font-medium">Modular & Clean Execution</span>
             </div>
             <h3 class="text-lg font-bold text-white">Autonomous Career Engine Launchpad</h3>
             <p class="text-xs text-slate-300 leading-relaxed">
-              Triggers all operations simultaneously in background: <strong>Naukri Recency Boost</strong>, <strong>50+ Mass Apply</strong>, <strong>LinkedIn Easy Apply</strong>, <strong>Hiring Feed Harvester</strong>, <strong>Full Gmail Sweep</strong>, and <strong>Two-Phase Resume Reply Dispatcher</strong>.
+              <strong>Single Button Pipeline</strong>: 1. <strong>Naukri Recency Boost</strong> & <strong>50+ Mass Apply</strong> • 2. <strong>LinkedIn Feed Harvester</strong> (Google Forms & Emails) • 3. <strong>LinkedIn Easy Apply</strong> • 4. <strong>Mumbai & Startups Network Expander</strong> (Checks open jobs, sends <em>Connection Requests Only — No Note Attached</em>).
+            </p>
+            <p class="text-[11px] text-purple-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>Strict Rule Enforced: Connection requests are sent with <strong>NO notes</strong>. Messaging has its own separate button below.</span>
             </p>
           </div>
-          <div>
+          <div class="flex flex-col sm:flex-row items-center gap-3">
             <button onclick="triggerMasterRunAll()" id="btnMasterHeroRun"
                     class="bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-sm py-3.5 px-6 rounded-2xl shadow-xl shadow-emerald-500/30 flex items-center gap-2.5 transition transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
               <i class="fa-solid fa-play text-slate-950 text-base"></i>
               <span id="masterHeroRunLabel">START ALL OPERATIONS</span>
+            </button>
+            <button onclick="triggerAction('send_messages')"
+                    class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-3.5 px-4 rounded-2xl shadow-lg shadow-purple-600/30 flex items-center gap-2 transition cursor-pointer">
+              <i class="fa-solid fa-comments"></i>
+              <span>Send Referral Messages (Separate)</span>
             </button>
           </div>
         </div>
@@ -2119,41 +2148,63 @@ def run_task(task_type):
                     add_log(f"⚠️ [2/6] Naukri Apply notice: {e}")
 
                 # 3. LinkedIn Job Scanner & Easy Apply
-                add_log("[3/6] Launching LinkedIn Easy Apply & Job Scanner...")
+                add_log("[3/7] Launching LinkedIn Easy Apply & Job Scanner...")
                 try:
                     os.system(f"python3 {os.path.join(BASE_DIR, 'run_automation.py')}")
-                    add_log("✅ [3/6] LinkedIn Easy Apply run completed.")
+                    add_log("✅ [3/7] LinkedIn Easy Apply run completed.")
                 except Exception as e:
-                    add_log(f"⚠️ [3/6] LinkedIn Easy Apply notice: {e}")
+                    add_log(f"⚠️ [3/7] LinkedIn Easy Apply notice: {e}")
 
                 # 4. LinkedIn Feed Harvester & Leads Dispatcher
-                add_log("[4/6] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
+                add_log("[4/7] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
                 try:
                     sync_leads()
-                    add_log("✅ [4/6] Feed Harvest & Leads Dispatch completed.")
+                    add_log("✅ [4/7] Feed Harvest & Leads Dispatch completed.")
                 except Exception as e:
-                    add_log(f"⚠️ [4/6] Feed Harvest notice: {e}")
+                    add_log(f"⚠️ [4/7] Feed Harvest notice: {e}")
 
-                # 5. Full Gmail Inbox Subject-Line Analysis
-                add_log("[5/6] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
+                # 5. Regional Companies & Startups Network Expander (Mumbai & Startups)
+                add_log("[5/7] Searching Mumbai Companies & Startups (Jobs Search + Connection Requests Only, NO NOTE)...")
+                try:
+                    expander = CompanyNetworkExpander()
+                    res_expand = expander.run_company_expansion(max_companies=3, max_connects_per_company=2)
+                    add_log(f"✅ [5/7] Company Expander complete: Checked {res_expand.get('companies_processed')} companies, found {res_expand.get('jobs_found')} aligned jobs, sent {res_expand.get('connections_sent')} connection requests (No note).")
+                except Exception as e:
+                    add_log(f"⚠️ [5/7] Company Expander notice: {e}")
+
+                # 6. Full Gmail Inbox Subject-Line Analysis
+                add_log("[6/7] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
                 try:
                     tracker = EmailTracker()
                     intel = tracker.scan_full_inbox()
                     passed = tracker.get_screening_passed()
-                    add_log(f"✅ [5/6] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
+                    add_log(f"✅ [6/7] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
                 except Exception as e:
-                    add_log(f"⚠️ [5/6] Gmail notice: {e}")
+                    add_log(f"⚠️ [6/7] Gmail notice: {e}")
 
-                # 6. Two-Phase LinkedIn Resume Reply Scanner
-                add_log("[6/6] Scanning LinkedIn Messaging Inbox for Resume Requests ('share resume')...")
+                # 7. Two-Phase LinkedIn Resume Reply Scanner
+                add_log("[7/7] Scanning LinkedIn Messaging Inbox for Resume Requests ('share resume')...")
                 try:
                     engine = ReferralEngine()
                     dispatches = engine.check_inbox_and_dispatch_resume()
-                    add_log(f"✅ [6/6] Two-Phase Resume Reply Scanner finished. Dispatched to {len(dispatches)} connections.")
+                    add_log(f"✅ [7/7] Two-Phase Resume Reply Scanner finished. Dispatched to {len(dispatches)} connections.")
                 except Exception as e:
-                    add_log(f"⚠️ [6/6] Resume Reply Scanner notice: {e}")
+                    add_log(f"⚠️ [7/7] Resume Reply Scanner notice: {e}")
 
                 add_log("🎉 ALL OPERATIONS FINISHED SUCCESSFULLY! All dashboard metrics, queues, and tables updated.")
+
+            elif task_type == "company_connect":
+                add_log("Starting Regional Companies & Startups Network Expander (Connection Request Only, No Note)...")
+                expander = CompanyNetworkExpander()
+                res_expand = expander.run_company_expansion(max_companies=4, max_connects_per_company=3)
+                add_log(f"SUCCESS: Checked {res_expand.get('companies_processed')} companies, sent {res_expand.get('connections_sent')} connection requests (No Note), found {res_expand.get('jobs_found')} jobs.")
+
+            elif task_type == "send_messages":
+                add_log("Starting Dedicated Messaging / Referral Outreach to Connections...")
+                engine = ReferralEngine()
+                conns = engine.get_existing_connections(limit=10)
+                results = engine.send_outreach_batch(conns)
+                add_log(f"SUCCESS: Sent {len(results)} personalized referral messages.")
 
             elif task_type == "naukri_boost":
                 add_log("Starting Naukri Daily Recency Boost...")

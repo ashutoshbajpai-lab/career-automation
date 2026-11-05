@@ -301,11 +301,16 @@ class ReferralEngine:
         except Exception:
             return False
 
-    def _send_connection_request(self, page, note_text: str) -> bool:
+    def _send_connection_request(self, page, note_text: str = "") -> bool:
+        """
+        Sends connection request.
+        If note_text is empty (default), sends clean connection request WITHOUT any note.
+        Only adds a note if note_text is explicitly provided.
+        """
         try:
             connect_btn = page.locator("button:has-text('Connect'), button[aria-label*='Invite'][aria-label*='to connect']").first
             if connect_btn.count() == 0 or not connect_btn.is_visible():
-                more_btn = page.locator("button:has-text('More'), button[aria-label='More actions']").first
+                more_btn = page.locator("main section button:has-text('More'), main button[aria-label='More actions']").first
                 if more_btn.count() > 0 and more_btn.is_visible():
                     more_btn.click()
                     human_delay(0.8, 1.5)
@@ -317,14 +322,24 @@ class ReferralEngine:
             connect_btn.click()
             human_delay(1.5, 2.5)
 
-            add_note_btn = page.locator("button:has-text('Add a note'), button[aria-label='Add a note']").first
-            if add_note_btn.count() > 0 and add_note_btn.is_visible():
-                add_note_btn.click()
-                human_delay(0.8, 1.5)
-                textarea = page.locator("textarea[name='message'], textarea#custom-message").first
-                if textarea.count() > 0:
-                    textarea.fill(note_text)
-                    human_delay(1.0, 1.5)
+            # Option A: Clean connection request with NO note (User requested: connection request only)
+            if not note_text:
+                send_no_note = page.locator("button:has-text('Send without a note'), button[aria-label*='Send without a note'], button:has-text('Send now'), button[aria-label='Send now']").first
+                if send_no_note.count() > 0 and send_no_note.is_visible():
+                    send_no_note.click()
+                    human_delay(1.5, 2.0)
+                    return True
+
+            # Option B: Add a note only when note_text is explicitly passed
+            if note_text:
+                add_note_btn = page.locator("button:has-text('Add a note'), button[aria-label='Add a note']").first
+                if add_note_btn.count() > 0 and add_note_btn.is_visible():
+                    add_note_btn.click()
+                    human_delay(0.8, 1.5)
+                    textarea = page.locator("textarea[name='message'], textarea#custom-message").first
+                    if textarea.count() > 0:
+                        textarea.fill(note_text)
+                        human_delay(1.0, 1.5)
 
             send_btn = page.locator("button:has-text('Send'), button[aria-label='Send invitation'], button[aria-label='Send now']").first
             if send_btn.count() > 0 and send_btn.is_visible():

@@ -43,6 +43,8 @@ def is_active_10hr_window() -> bool:
 
 
 def job_scan_gmail():
+    if not is_active_10hr_window():
+        return
     logger.info("SCHEDULED TASK: Checking Gmail inbox for screening cleared updates...")
     try:
         t = EmailTracker()
@@ -123,37 +125,24 @@ def job_shift_wrap_up():
 def start_scheduler():
     logger.info("Starting Autonomous 10-Hour Daily Shift Scheduler (09:00 AM - 07:00 PM IST)...")
 
-    # 10-HOUR SCHEDULE BREAKDOWN:
+    # CONTINUOUS RECURRING SCRAPING THROUGHOUT THE 10-HOUR WINDOW:
+    # 1. Feed Harvester runs every 45 minutes to catch newly posted hiring forms & leads:
+    schedule.every(45).minutes.do(job_harvest_leads)
+
+    # 2. Gmail Inbox Sweeper runs every 30 minutes for new screening/exam updates:
+    schedule.every(30).minutes.do(job_scan_gmail)
+
+    # 3. Two-Phase Resume Reply Scanner runs every 30 minutes to reply to recruiter requests:
+    schedule.every(30).minutes.do(job_scan_resume_replies)
+
+    # FIXED TIME MILESTONES:
     # 09:00 AM: Start Shift with Profile Recency Boost
     schedule.every().day.at("09:00").do(job_naukri_boost)
-
-    # 09:15 AM: Morning Gmail Sweep for Admit Cards / Exam Dates
-    schedule.every().day.at("09:15").do(job_scan_gmail)
-
-    # 09:30 AM: Morning 50+ Mass Apply Run
     schedule.every().day.at("09:30").do(job_naukri_apply)
-
-    # 11:30 AM: LinkedIn Feed Harvester (Forms & Recruiter Leads)
-    schedule.every().day.at("11:30").do(job_harvest_leads)
-
-    # 01:00 PM: Midday Inbox Sweep & Resume Reply Check
-    schedule.every().day.at("13:00").do(job_scan_gmail)
-    schedule.every().day.at("13:15").do(job_scan_resume_replies)
-
-    # 03:30 PM: Afternoon Check & Second Apply Pass
     schedule.every().day.at("15:30").do(job_naukri_apply)
-    schedule.every().day.at("16:00").do(job_harvest_leads)
-
-    # 05:30 PM: Late Afternoon Resume Reply Check
-    schedule.every().day.at("17:30").do(job_scan_resume_replies)
-
-    # 06:45 PM: Final Evening Gmail Sweep (Screening Passed Check)
-    schedule.every().day.at("18:45").do(job_scan_gmail)
-
-    # 07:00 PM: Wrap up 10-hour shift
     schedule.every().day.at("19:00").do(job_shift_wrap_up)
 
-    append_history("10-Hour Daily Shift Scheduler initialized (09:00 AM - 07:00 PM IST active window).")
+    append_history("10-Hour Daily Continuous Shift Scheduler active (Continuous 30m/45m scraping from 09:00 AM - 07:00 PM IST).")
 
     while True:
         schedule.run_pending()

@@ -58,11 +58,11 @@ class FeedHarvester:
 
         self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
         try:
-            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=20000)
+            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=35000)
         except Exception as e:
-            self._log(f"Navigation notice: {e}")
+            self._log(f"Navigation fallback: {e}")
             try:
-                self.page.goto("https://www.linkedin.com/feed/", timeout=15000)
+                self.page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=20000)
             except Exception:
                 pass
         human_delay(2.0, 3.0)
@@ -70,13 +70,6 @@ class FeedHarvester:
         current_url = self.page.url
         current_title = self.page.title()
         self._log(f"Arrived at LinkedIn. Page Title: '{current_title}' | URL: {current_url}")
-
-        # Capture debug screenshot for diagnostics
-        try:
-            shot_path = os.path.join(self.data_dir, "feed_debug_screen.png")
-            self.page.screenshot(path=shot_path, full_page=False)
-        except Exception:
-            pass
 
         # Check if login or checkpoint
         if "login" in current_url or "checkpoint" in current_url:

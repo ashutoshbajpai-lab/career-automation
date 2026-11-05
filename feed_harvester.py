@@ -52,21 +52,39 @@ class FeedHarvester:
     def run(self) -> list:
         self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
         try:
-            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=30000)
-        except Exception:
-            self.page.goto("https://www.linkedin.com/feed/")
-        human_delay(3.0, 5.0)
+            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=25000)
+        except Exception as e:
+            self._log(f"Navigation notice: {e}")
+            try:
+                self.page.goto("https://www.linkedin.com/feed/", timeout=20000)
+            except Exception:
+                pass
+        human_delay(2.0, 3.5)
 
-        # Check if login is required
-        if "login" in self.page.url:
-            self._log("⚠️ LinkedIn login required. Authentication cookies may be expired.")
+        current_url = self.page.url
+        current_title = self.page.title()
+        self._log(f"Arrived at LinkedIn. Page Title: '{current_title}' | URL: {current_url}")
+
+        # Capture debug screenshot for diagnostics
+        try:
+            shot_path = os.path.join(self.data_dir, "feed_debug_screen.png")
+            self.page.screenshot(path=shot_path, full_page=False)
+        except Exception:
+            pass
+
+        # Check if login or checkpoint
+        if "login" in current_url or "checkpoint" in current_url:
+            self._log(f"⚠️ LinkedIn requires authentication / checkpoint: {current_url}")
             return []
 
-        # Smooth scrolling to trigger feed hydration
+        # Fast non-blocking scroll to trigger feed hydration
         self._log("Scrolling feed to trigger dynamic hydration of hiring cards...")
-        for step in range(3):
-            smooth_scroll(self.page, total_pixels=800, steps=3)
-            human_delay(1.5, 2.5)
+        for scroll_pos in [400, 900, 1500]:
+            try:
+                self.page.evaluate(f"window.scrollTo(0, {scroll_pos});")
+                human_delay(1.0, 1.5)
+            except Exception:
+                pass
 
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []

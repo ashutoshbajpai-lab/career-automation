@@ -780,7 +780,7 @@ MERAKI_UI_HTML = """
                   <th class="p-3">Recruiter / Author</th>
                   <th class="p-3">Recruiter Email</th>
                   <th class="p-3">Draft Application Preview</th>
-                  <th class="p-3 text-right">Send Email</th>
+                  <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="recruiterLeadsTableBody">
@@ -1439,17 +1439,29 @@ MERAKI_UI_HTML = """
         tbody.innerHTML = d.forms.map(f => `
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
-            <td class="p-3 font-bold text-slate-900">${f.poster}</td>
+            <td class="p-3 font-bold text-slate-900">
+              <div>${f.poster}</div>
+              <a href="${f.post_url}" target="_blank" class="text-[11px] text-teal-700 hover:text-teal-900 font-semibold inline-flex items-center gap-1 mt-0.5" title="View Source Post on LinkedIn">
+                <i class="fa-brands fa-linkedin text-xs text-blue-600"></i>
+                <span>Source Post</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+              </a>
+            </td>
             <td class="p-3 text-slate-600 max-w-md truncate" title="${f.context}">${f.context}</td>
             <td class="p-3">
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status}</span>
             </td>
             <td class="p-3 text-right whitespace-nowrap">
-              <div class="inline-flex items-center gap-2 justify-end">
+              <div class="inline-flex items-center gap-1.5 justify-end">
                 <a href="${f.form_url}" target="_blank"
                    class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
                   <span>Open &amp; Fill Form</span>
                   <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                </a>
+                <a href="${f.post_url}" target="_blank" title="Open source LinkedIn post in new tab"
+                   class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition">
+                  <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
+                  <span>Post</span>
                 </a>
                 <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
                         class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
@@ -1479,7 +1491,14 @@ MERAKI_UI_HTML = """
         tbody.innerHTML = d.emails.map(e => `
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${e.timestamp}</td>
-            <td class="p-3 font-bold text-slate-900">${e.recipient_name}</td>
+            <td class="p-3 font-bold text-slate-900">
+              <div>${e.recipient_name}</div>
+              <a href="${e.post_url}" target="_blank" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 mt-0.5" title="View Source Post on LinkedIn">
+                <i class="fa-brands fa-linkedin text-xs text-blue-600"></i>
+                <span>Source Post</span>
+                <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+              </a>
+            </td>
             <td class="p-3 font-semibold text-indigo-600">${e.email}</td>
             <td class="p-3 text-slate-600 max-w-sm truncate" title="${e.draft_body}">
               <div class="font-medium text-slate-800 text-xs">${e.subject}</div>
@@ -1491,6 +1510,11 @@ MERAKI_UI_HTML = """
                    class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-sky-600/20">
                   <i class="fa-solid fa-envelope"></i>
                   <span>Send via Gmail</span>
+                </a>
+                <a href="${e.post_url}" target="_blank" title="Open source LinkedIn post in new tab"
+                   class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition">
+                  <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
+                  <span>Post</span>
                 </a>
                 <a href="${e.mailto_link}" class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="Open local mail client">
                   <i class="fa-solid fa-paper-plane"></i>

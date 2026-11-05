@@ -26,6 +26,15 @@ CANDIDATE_EMAIL = "ashutosh.bajpai.028works@gmail.com"
 CANDIDATE_PHONE = "8081377486"
 
 
+import re
+
+def clean_extracted_email(email_str: str) -> str:
+    """Strips trailing punctuation, numbers, or words glued to domain."""
+    em = email_str.strip(' .,:;)"\'')
+    m = re.search(r'([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.(?:com|in|org|net|co|ai|io|tech|edu|gov|co\.in|ac\.in|[a-zA-Z]{2,8}))', em, re.IGNORECASE)
+    return m.group(1).lower() if m else em.lower()
+
+
 def sync_leads():
     os.makedirs(DATA_DIR, exist_ok=True)
     if not os.path.exists(FEED_LEADS_JSON):
@@ -59,11 +68,15 @@ def sync_leads():
         except Exception:
             pass
 
-    # Load existing if available
+    # Load existing if available and backfill post_url
     if os.path.exists(PENDING_FORMS_JSON):
         try:
             with open(PENDING_FORMS_JSON, "r", encoding="utf-8") as f:
                 pending_forms = [item for item in json.load(f) if item.get("form_url") not in dismissed_forms and item.get("id") not in dismissed_forms]
+                for item in pending_forms:
+                    if not item.get("post_url"):
+                        ctx = item.get("context", "").replace("Feed post", "").strip()[:50]
+                        item["post_url"] = f"https://www.linkedin.com/search/results/content/?keywords={quote(ctx or item.get('poster', 'hiring'))}"
                 seen_forms = {item.get("form_url") for item in pending_forms if item.get("form_url")}
         except Exception:
             pending_forms = []
@@ -71,15 +84,33 @@ def sync_leads():
     if os.path.exists(RECRUITER_LEADS_JSON):
         try:
             with open(RECRUITER_LEADS_JSON, "r", encoding="utf-8") as f:
-                recruiter_leads = [item for item in json.load(f) if item.get("email") not in dismissed_emails and item.get("id") not in dismissed_emails]
+                raw_leads = json.load(f)
+                recruiter_leads = []
+                for item in raw_leads:
+                    if item.get("email") in dismissed_emails or item.get("id") in dismissed_emails:
+                        continue
+                    item["email"] = clean_extracted_email(item.get("email", ""))
+                    if not item["email"] or len(item["email"]) < 6:
+                        continue
+                    if not item.get("post_url"):
+                        item["post_url"] = f"https://www.linkedin.com/search/results/content/?keywords={quote(item['email'])}"
+                    # Fix 'Hi LinkedIn' salutation if present
+                    if "Hi LinkedIn," in item.get("draft_body", ""):
+                        item["draft_body"] = item["draft_body"].replace("Hi LinkedIn,", "Hi Hiring Team,")
+                    recruiter_leads.append(item)
                 seen_emails = {item.get("email") for item in recruiter_leads if item.get("email")}
         except Exception:
+            recruiter_leads = []
             recruiter_leads = []
 
     for post in feed_leads:
         author = post.get("author", "LinkedIn Poster")
         preview = post.get("preview", "")
         timestamp = post.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        post_url = post.get("post_url", "").strip()
+        if not post_url:
+            search_context = f"{author if 'member' not in author.lower() else ''} {preview[:60]}".strip()
+            post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(search_context or 'hiring')}"
 
         # 1. Process Form Links & External Application Links
         forms_str = post.get("form_links", "")
@@ -92,6 +123,7 @@ def sync_leads():
                         "timestamp": timestamp,
                         "poster": author,
                         "form_url": form_url,
+                        "post_url": post_url,
                         "context": preview[:180],
                         "status": "Pending Manual Fill"
                     })
@@ -104,6 +136,7 @@ def sync_leads():
                         "timestamp": timestamp,
                         "poster": author,
                         "form_url": link,
+                        "post_url": post_url,
                         "context": preview[:180],
                         "status": "Pending Manual Fill"
                     })
@@ -111,12 +144,22 @@ def sync_leads():
         # 2. Process Recruiter Emails
         emails_str = post.get("emails", "")
         if emails_str:
-            for email in [e.strip() for e in emails_str.split(",") if e.strip()]:
+            for raw_email in [e.strip() for e in emails_str.split(",") if e.strip()]:
+                email = clean_extracted_email(raw_email)
+                if not email or len(email) < 6:
+                    continue
                 if email not in seen_emails and email not in dismissed_emails:
                     seen_emails.add(email)
+
+                    # Professional salutation: Avoid 'Hi LinkedIn'
+                    if author and not any(kw in author.lower() for kw in ["linkedin", "member", "feed post"]):
+                        salutation = author.split()[0].capitalize()
+                    else:
+                        salutation = "Hiring Team"
+
                     subject = f"Application for Analyst / Product Role - {CANDIDATE_NAME} ({CANDIDATE_COLLEGE})"
                     body = (
-                        f"Hi {author.split()[0] if author else 'Hiring Team'},\n\n"
+                        f"Hi {salutation},\n\n"
                         f"I came across your recruitment post regarding the opening and would love to be considered. "
                         f"I am a final-year student at {CANDIDATE_COLLEGE} with hands-on experience in Product and Data Analysis, "
                         f"market research, and cross-functional execution.\n\n"
@@ -132,15 +175,20 @@ def sync_leads():
                     mailto = f"mailto:{email}?subject={quote(subject)}&body={quote(body)}"
                     gmail_web_link = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(email)}&su={quote(subject)}&body={quote(body)}"
 
+                    recruiter_post_url = post_url
+                    if not recruiter_post_url or "keywords=" in recruiter_post_url:
+                        recruiter_post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(email)}"
+
                     recruiter_leads.append({
                         "id": str(abs(hash(email))),
                         "timestamp": timestamp,
-                        "recipient_name": author,
+                        "recipient_name": author if "member" not in author.lower() else "Hiring Lead",
                         "email": email,
                         "subject": subject,
                         "draft_body": body,
                         "mailto_link": mailto,
                         "gmail_web_link": gmail_web_link,
+                        "post_url": recruiter_post_url,
                         "status": "Draft Prepared",
                         "context": preview[:180]
                     })

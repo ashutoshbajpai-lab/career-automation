@@ -14,7 +14,13 @@ from browser_session import human_delay, smooth_scroll
 
 logger = logging.getLogger(__name__)
 
-EMAIL_REGEX = re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+')
+EMAIL_REGEX = re.compile(r'\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.(?:com|in|org|net|co|ai|io|tech|edu|gov|co\.in|ac\.in|[a-zA-Z]{2,8})\b', re.IGNORECASE)
+
+def clean_extracted_email(email_str: str) -> str:
+    """Strips trailing punctuation, numbers, or words glued to domain."""
+    em = email_str.strip(' .,:;)"\'')
+    m = re.search(r'([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.(?:com|in|org|net|co|ai|io|tech|edu|gov|co\.in|ac\.in|[a-zA-Z]{2,8}))', em, re.IGNORECASE)
+    return m.group(1).lower() if m else em.lower()
 FORM_DOMAINS = [
     "forms.gle", "docs.google.com/forms", "typeform.com", "airtable.com", 
     "notion.site", "notion.so", "tally.so", "forms.office.com", 
@@ -97,12 +103,26 @@ class FeedHarvester:
                         el.setAttribute('data-harvested', '1');
                         const rawText = (el.textContent || '').trim();
                         if (rawText.length > 80) {
-                            const authorEl = el.querySelector(".update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
-                            const authorName = authorEl ? (authorEl.textContent || '').trim() : '';
+                            const authorEl = el.querySelector(".update-components-actor__name span[aria-hidden='true'], .update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
+                            let authorName = authorEl ? (authorEl.textContent || '').trim() : '';
+                            if (!authorName) {
+                                const lines = rawText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('Feed post'));
+                                if (lines.length) authorName = lines[0].split('•')[0].trim();
+                            }
+
+                            const urn = el.getAttribute('data-urn') || el.closest('[data-urn]')?.getAttribute('data-urn') || el.querySelector('[data-urn]')?.getAttribute('data-urn') || '';
+                            let postPermalink = (urn && urn.includes('urn:li:')) ? `https://www.linkedin.com/feed/update/${urn}/` : '';
+
                             const links = Array.from(el.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
+                            if (!postPermalink) {
+                                const foundLink = links.find(h => h.includes('/feed/update/urn:li:activity:') || h.includes('/posts/'));
+                                if (foundLink) postPermalink = foundLink.split('?')[0];
+                            }
+
                             results.push({
                                 text: rawText,
                                 author: authorName,
+                                post_url: postPermalink,
                                 links: links
                             });
                         }
@@ -156,16 +176,23 @@ class FeedHarvester:
             if hash_id in seen_urns:
                 continue
 
-            # Extract Emails
-            emails = list(set(EMAIL_REGEX.findall(text)))
+            # Extract and sanitize Emails
+            raw_emails = list(set(EMAIL_REGEX.findall(text)))
+            emails = list(set(clean_extracted_email(e) for e in raw_emails if clean_extracted_email(e)))
 
             # Extract Forms & External links
             form_links = []
             external_links = []
+            post_url = item.get("post_url", "")
 
             for href_raw in item.get("links", []):
                 href = extract_real_url(href_raw)
-                if not href or "linkedin.com/in/" in href or "linkedin.com/feed/" in href or "linkedin.com/article" in href or "linkedin.com/posts/" in href:
+                if not href or "linkedin.com/in/" in href or "linkedin.com/article" in href:
+                    continue
+
+                if "linkedin.com/feed/update/urn:li:activity:" in href or "linkedin.com/posts/" in href:
+                    if not post_url:
+                        post_url = href.split("?")[0]
                     continue
 
                 if any(domain in href.lower() for domain in FORM_DOMAINS):
@@ -188,6 +215,11 @@ class FeedHarvester:
                 lines = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().startswith("Feed post") and not "likes this" in line]
                 author = lines[0] if lines else "LinkedIn Member"
 
+            # Construct verified fallback post URL if direct link wasn't captured
+            if not post_url:
+                search_q = f"{author} {emails[0] if emails else (form_links[0] if form_links else text[:50])}".replace("LinkedIn Member", "").strip()
+                post_url = f"https://www.linkedin.com/search/results/content/?keywords={urllib.parse.quote(search_q or 'hiring')}"
+
             has_keyword = any(kw in text_lower for kw in lead_keywords)
             has_actionable = bool(emails or form_links or external_links or any(w in text_lower for w in ["dm", "comment", "email", "cv", "resume", "apply"]))
             
@@ -198,6 +230,7 @@ class FeedHarvester:
                     "emails": ", ".join(emails),
                     "form_links": ", ".join(form_links),
                     "hyperlinks": ", ".join(external_links[:3]),
+                    "post_url": post_url,
                     "preview": text[:200].replace("\n", " ").strip(),
                     "id": hash_id
                 }
@@ -216,7 +249,7 @@ class FeedHarvester:
 
         file_exists = os.path.exists(self.leads_csv)
         with open(self.leads_csv, "a", newline="", encoding="utf-8") as f:
-            fieldnames = ["timestamp", "author", "emails", "form_links", "hyperlinks", "preview", "id"]
+            fieldnames = ["timestamp", "author", "emails", "form_links", "hyperlinks", "post_url", "preview", "id"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()

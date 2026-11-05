@@ -76,42 +76,65 @@ class FeedHarvester:
             self._log(f"⚠️ LinkedIn requires authentication / checkpoint: {current_url}")
             return []
 
-        # Fast non-blocking scroll to trigger feed hydration
-        self._log("Scrolling feed to trigger dynamic hydration of hiring cards...")
-        for scroll_pos in [400, 900, 1500]:
+        # Multi-pass continuous scrolling with incremental card collection
+        self._log("Scrolling feed deeply across 10 scroll passes & expanding posts...")
+        seen_card_hashes = set()
+        raw_items = []
+
+        for scroll_i in range(1, 11):
+            # 1. Expand all '...see more' buttons currently visible in the DOM
             try:
-                self.page.evaluate(f"window.scrollTo(0, {scroll_pos});")
-                human_delay(1.0, 1.5)
+                self.page.evaluate('''() => {
+                    document.querySelectorAll("button.feed-shared-inline-show-more-text__see-more-less-toggle, button[aria-label*='see more']").forEach(b => {
+                        try { b.click(); } catch(e) {}
+                    });
+                }''')
             except Exception:
                 pass
 
+            # 2. Extract visible cards at current scroll position
+            try:
+                batch = self.page.evaluate('''() => {
+                    const feed = document.querySelector('[data-testid="mainFeed"], [data-component-type="LazyColumn"], main');
+                    if (!feed) return [];
+                    const items = feed.querySelectorAll('[data-lazy-mount-id], [role="listitem"], div.feed-shared-update-v2');
+                    const results = [];
+                    items.forEach(el => {
+                        const text = el.innerText || '';
+                        if (text.length > 50) {
+                            const links = Array.from(el.querySelectorAll('a')).map(a => ({
+                                href: a.href,
+                                text: (a.innerText || '').trim()
+                            }));
+                            results.push({
+                                text: text,
+                                links: links
+                            });
+                        }
+                    });
+                    return results;
+                }''')
+                for card in batch:
+                    h = abs(hash(card["text"][:100]))
+                    if h not in seen_card_hashes:
+                        seen_card_hashes.add(h)
+                        raw_items.append(card)
+            except Exception:
+                pass
+
+            # 3. Scroll down to trigger lazy loading of next cards
+            try:
+                self.page.evaluate("window.scrollBy(0, 900);")
+                human_delay(1.2, 1.8)
+            except Exception:
+                pass
+
+        self._log(f"Analyzed feed: Loaded {len(raw_items)} distinct post cards across 10 scroll passes. Filtering for opportunities...")
+
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []
-        max_posts = self.config.get("limits", {}).get("max_feed_posts_per_run", 25)
+        max_posts = self.config.get("limits", {}).get("max_feed_posts_per_run", 50)
         lead_keywords = [k.lower() for k in self.config.get("lead_keywords", ["hiring", "intern", "analyst", "product", "referral", "opening", "job"])]
-
-        raw_items = self.page.evaluate('''() => {
-            const feed = document.querySelector('[data-testid="mainFeed"], [data-component-type="LazyColumn"], main');
-            if (!feed) return [];
-            const items = feed.querySelectorAll('[data-lazy-mount-id], [role="listitem"]');
-            const results = [];
-            items.forEach(el => {
-                const text = el.innerText || '';
-                if (text.length > 50) {
-                    const links = Array.from(el.querySelectorAll('a')).map(a => ({
-                        href: a.href,
-                        text: (a.innerText || '').trim()
-                    }));
-                    results.push({
-                        text: text,
-                        links: links
-                    });
-                }
-            });
-            return results;
-        }''')
-
-        self._log(f"Analyzed feed: Loaded {len(raw_items)} post cards. Filtering for opportunities...")
 
         for item in raw_items:
             if len(new_leads) >= max_posts:

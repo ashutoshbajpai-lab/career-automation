@@ -2218,7 +2218,7 @@ def execute_task(task_type):
                 mgr = BrowserManager()
                 try:
                     context, page = mgr.get_context_and_page(force_headless=True)
-                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
+                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 50}})
                     state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                     harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
                     new_leads = harvester.run()
@@ -2326,7 +2326,7 @@ def execute_task(task_type):
             mgr = BrowserManager()
             try:
                 context, page = mgr.get_context_and_page(force_headless=True)
-                config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 25}})
+                config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 50}})
                 state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                 harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
                 new_leads = harvester.run()

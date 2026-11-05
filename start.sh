@@ -1,23 +1,5 @@
 #!/usr/bin/env bash
 
-mkdir -p data
-
-if [ -n "$SESSION_COOKIES_BASE64" ]; then
-    echo "--> Restoring session cookies from secure environment variable..."
-    python3 -c '
-import os, base64
-try:
-    val = os.environ.get("SESSION_COOKIES_BASE64", "").strip()
-    if val:
-        decoded = base64.b64decode(val)
-        with open("data/session_cookies.json", "wb") as f:
-            f.write(decoded)
-        print("--> Cookies decoded and saved successfully.")
-except Exception as e:
-    print("--> Cookie restore notice:", e)
-' || true
-fi
-
 # Start Xvfb only if explicitly forced to headed mode
 if [ "$HEADLESS" = "false" ] && command -v Xvfb >/dev/null 2>&1; then
     echo "--> Starting lightweight Xvfb virtual display on :99..."
@@ -29,5 +11,5 @@ else
     unset DISPLAY
 fi
 
-echo "--> Launching Careercommand with Integrated 10h Shift Scheduler on Port ${PORT:-5055}..."
-exec python3 app.py
+echo "--> Launching Careercommand on Port ${PORT:-5055}..."
+python3 app.py

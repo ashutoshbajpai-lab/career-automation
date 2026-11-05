@@ -53,6 +53,17 @@ LINKEDIN_APPLIED_CSV = os.path.join(DATA_DIR, "applied_jobs.csv")
 OUTREACH_CSV = os.path.join(DATA_DIR, "outreach_tracker.csv")
 OUTREACH_JSON = os.path.join(DATA_DIR, "outreach_tracker.json")
 
+# Restore session cookies safely from environment variable if provided
+try:
+    env_b64 = os.environ.get("SESSION_COOKIES_BASE64", "").strip()
+    if env_b64:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(os.path.join(DATA_DIR, "session_cookies.json"), "wb") as f:
+            f.write(base64.b64decode(env_b64))
+        logger.info("Session cookies successfully restored from secure environment variable.")
+except Exception as e:
+    logger.warning(f"Note on restoring session cookies: {e}")
+
 CURRENT_TASK = {"running": False, "name": "Idle", "started_at": None}
 LIVE_LOGS = []
 

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+mkdir -p data
+if [ -n "$SESSION_COOKIES_BASE64" ]; then
+    echo "--> Restoring session cookies from secure environment variable..."
+    echo "$SESSION_COOKIES_BASE64" | base64 -d > data/session_cookies.json 2>/dev/null || true
+fi
+
 # Start Xvfb only if explicitly forced to headed mode
 if [ "$HEADLESS" = "false" ] && command -v Xvfb >/dev/null 2>&1; then
     echo "--> Starting lightweight Xvfb virtual display on :99..."
@@ -11,5 +17,5 @@ else
     unset DISPLAY
 fi
 
-echo "--> Launching Careercommand on Port ${PORT:-5055}..."
-python3 app.py
+echo "--> Launching Careercommand with Integrated 10h Shift Scheduler on Port ${PORT:-5055}..."
+exec python3 app.py

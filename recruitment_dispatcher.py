@@ -474,46 +474,6 @@ def dismiss_recruiter_leads_batch(lead_ids: list) -> int:
         json.dump(list(dismissed_emails), f, indent=2)
 
     return removed_count
-    """Removes a recruiter email lead and blacklists it from reappearing."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    recruiter_leads = []
-    if os.path.exists(RECRUITER_LEADS_JSON):
-        try:
-            with open(RECRUITER_LEADS_JSON, "r", encoding="utf-8") as f:
-                recruiter_leads = json.load(f)
-        except Exception:
-            recruiter_leads = []
-
-    dismissed_emails = set()
-    if os.path.exists(DISMISSED_RECRUITERS_JSON):
-        try:
-            with open(DISMISSED_RECRUITERS_JSON, "r", encoding="utf-8") as f:
-                dismissed_emails = set(json.load(f))
-        except Exception:
-            pass
-
-    remaining = []
-    for item in recruiter_leads:
-        if (lead_id and item.get("id") == lead_id) or (email and item.get("email") == email):
-            if item.get("email"):
-                dismissed_emails.add(item.get("email"))
-            if item.get("id"):
-                dismissed_emails.add(item.get("id"))
-        else:
-            remaining.append(item)
-
-    if email:
-        dismissed_emails.add(email)
-    if lead_id:
-        dismissed_emails.add(lead_id)
-
-    with open(RECRUITER_LEADS_JSON, "w", encoding="utf-8") as f:
-        json.dump(remaining, f, indent=2)
-
-    with open(DISMISSED_RECRUITERS_JSON, "w", encoding="utf-8") as f:
-        json.dump(list(dismissed_emails), f, indent=2)
-
-    return True
 
 
 if __name__ == "__main__":

@@ -30,12 +30,16 @@ def main():
         except Exception as e:
             logger.error(f"Error decoding SESSION_COOKIES_BASE64: {e}")
 
-    if not os.path.exists(SESSION_FILE):
-        logger.error(f"Session file not found at: {SESSION_FILE}")
+    if not os.path.exists(SESSION_FILE) or os.path.getsize(SESSION_FILE) == 0:
+        logger.info(f"No session cookies to import (missing or empty at {SESSION_FILE}).")
         return
 
-    with open(SESSION_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not parse {SESSION_FILE}: {e}")
+        return
 
     cookies = data.get("cookies", [])
     logger.info(f"Injecting {len(cookies)} session cookies into cloud profile...")

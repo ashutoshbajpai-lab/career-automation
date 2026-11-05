@@ -118,11 +118,13 @@ class BrowserManager:
                 "--disable-gpu",
                 "--disable-software-rasterizer",
                 "--renderer-process-limit=1",
+                "--disk-cache-size=1",
+                "--media-cache-size=1",
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--disable-component-update",
                 "--disable-sync",
-                "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process"
+                "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,Translate,OptimizationHints,MediaRouter"
             ]
         }
         if os.path.exists(chrome_executable):

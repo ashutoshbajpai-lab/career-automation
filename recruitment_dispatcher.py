@@ -62,7 +62,7 @@ def sync_leads():
         preview = post.get("preview", "")
         timestamp = post.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-        # 1. Process Form Links
+        # 1. Process Form Links & External Application Links
         forms_str = post.get("form_links", "")
         if forms_str:
             for form_url in [u.strip() for u in forms_str.split(",") if u.strip()]:
@@ -73,6 +73,18 @@ def sync_leads():
                         "timestamp": timestamp,
                         "poster": author,
                         "form_url": form_url,
+                        "context": preview[:180],
+                        "status": "Pending Manual Fill"
+                    })
+        elif post.get("hyperlinks"):
+            for link in [u.strip() for u in post.get("hyperlinks", "").split(",") if u.strip()]:
+                if link not in seen_forms and not any(ign in link.lower() for ign in ["linkedin.com", "apple.com", "play.google.com"]):
+                    seen_forms.add(link)
+                    pending_forms.append({
+                        "id": str(abs(hash(link))),
+                        "timestamp": timestamp,
+                        "poster": author,
+                        "form_url": link,
                         "context": preview[:180],
                         "status": "Pending Manual Fill"
                     })

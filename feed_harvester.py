@@ -15,7 +15,12 @@ from browser_session import human_delay, smooth_scroll
 logger = logging.getLogger(__name__)
 
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+')
-FORM_DOMAINS = ["forms.gle", "docs.google.com/forms", "typeform.com", "airtable.com", "notion.site", "notion.so", "tally.so"]
+FORM_DOMAINS = [
+    "forms.gle", "docs.google.com/forms", "typeform.com", "airtable.com", 
+    "notion.site", "notion.so", "tally.so", "forms.office.com", 
+    "surveymonkey.com", "greenhouse.io", "lever.co", "ashbyhq.com", 
+    "smartrecruiters.com", "bamboohr.com", "workday.com", "wellfound.com"
+]
 
 
 def extract_real_url(href: str) -> str:
@@ -50,12 +55,6 @@ class FeedHarvester:
                 pass
 
     def run(self) -> list:
-        self._log("Configuring lightweight page route (blocking media & heavy fonts to optimize RAM)...")
-        try:
-            self.page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] or any(t in route.request.url for t in ["doubleclick", "google-analytics", "googletagmanager", "snap.licdn.com", "demdex", "adservice"]) else route.continue_())
-        except Exception:
-            pass
-
         self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
         try:
             self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=35000)
@@ -83,23 +82,20 @@ class FeedHarvester:
         self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 65
+        max_scroll_passes = 75
 
         for scroll_i in range(1, max_scroll_passes + 1):
-            # 1. High-performance card extraction using textContent (zero layout reflow)
             try:
-                batch = self.page.evaluate('''() => {
-                    const mounts = Array.from(document.querySelectorAll('[data-lazy-mount-id], div.feed-shared-update-v2, div[data-urn*="activity"]'));
+                new_cards = self.page.evaluate('''() => {
+                    const mounts = Array.from(document.querySelectorAll('[data-lazy-mount-id]:not([data-harvested]), div.feed-shared-update-v2:not([data-harvested]), div[data-urn*="activity"]:not([data-harvested])'));
                     const results = [];
                     mounts.forEach(el => {
+                        el.setAttribute('data-harvested', '1');
                         const rawText = (el.textContent || '').trim();
-                        if (rawText.length > 120) {
+                        if (rawText.length > 100) {
                             const authorEl = el.querySelector(".update-components-actor__name, .feed-shared-actor__name, span[dir='ltr'] span");
                             const authorName = authorEl ? (authorEl.textContent || '').trim() : '';
-                            const links = Array.from(el.querySelectorAll('a')).map(a => ({
-                                href: a.href,
-                                text: (a.textContent || '').trim()
-                            }));
+                            const links = Array.from(el.querySelectorAll('a')).map(a => a.href).filter(h => h && h.startsWith('http'));
                             results.push({
                                 text: rawText,
                                 author: authorName,
@@ -107,34 +103,27 @@ class FeedHarvester:
                             });
                         }
                     });
+                    const main = document.querySelector('main') || document.scrollingElement || document.body;
+                    main.scrollTop += 1200;
+                    window.scrollBy(0, 1200);
                     return results;
                 }''')
-                for card in batch:
+                for card in new_cards:
                     h = abs(hash(card["text"][:120]))
                     if h not in seen_card_hashes:
                         seen_card_hashes.add(h)
                         raw_items.append(card)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Pass {scroll_i} evaluation notice: {e}")
 
             if len(raw_items) >= target_posts:
                 self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
                 break
 
-            if scroll_i % 5 == 0:
+            if scroll_i % 10 == 0:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")
 
-            # 2. Smoothly advance <main> container scroll position & trigger LinkedIn infinite scroll
-            try:
-                self.page.evaluate('''() => {
-                    const main = document.querySelector('main') || document.scrollingElement || document.body;
-                    main.scrollTop += 950;
-                    window.scrollBy(0, 950);
-                }''')
-                human_delay(0.9, 1.4)
-            except Exception:
-                pass
-
+            human_delay(0.9, 1.3)
             if scroll_i % 15 == 0:
                 import gc
                 gc.collect()
@@ -144,7 +133,11 @@ class FeedHarvester:
         seen_urns = set(self.state.get("seen_post_urns", []))
         new_leads = []
         max_posts = max(100, int(self.config.get("limits", {}).get("max_feed_posts_per_run", 100)))
-        lead_keywords = [k.lower() for k in self.config.get("lead_keywords", ["hiring", "intern", "analyst", "product", "referral", "opening", "job"])]
+        lead_keywords = [
+            "hiring", "hire", "recruit", "intern", "internship", "analyst", "product", "associate", 
+            "referral", "opening", "openings", "job", "jobs", "vacancy", "vacancies", "career", "careers", 
+            "join our team", "dm me", "apply here", "send resume", "send cv", "drop your resume", "share cv"
+        ]
 
         for item in raw_items:
             if len(new_leads) >= max_posts:
@@ -165,9 +158,9 @@ class FeedHarvester:
             form_links = []
             external_links = []
 
-            for l in item["links"]:
-                href = extract_real_url(l["href"])
-                if not href or "linkedin.com/in/" in href or "linkedin.com/feed/" in href or "linkedin.com/article" in href:
+            for href_raw in item.get("links", []):
+                href = extract_real_url(href_raw)
+                if not href or "linkedin.com/in/" in href or "linkedin.com/feed/" in href or "linkedin.com/article" in href or "linkedin.com/posts/" in href:
                     continue
 
                 if any(domain in href.lower() for domain in FORM_DOMAINS):
@@ -191,7 +184,9 @@ class FeedHarvester:
                 author = lines[0] if lines else "LinkedIn Member"
 
             has_keyword = any(kw in text_lower for kw in lead_keywords)
-            if emails or form_links or (has_keyword and external_links):
+            has_actionable = bool(emails or form_links or external_links or any(w in text_lower for w in ["dm", "comment", "email", "cv", "resume", "apply"]))
+            
+            if has_keyword and has_actionable:
                 record = {
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "author": author[:60],

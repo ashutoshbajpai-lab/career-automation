@@ -95,9 +95,7 @@ class FeedHarvester:
             # 2. Extract visible cards at current scroll position
             try:
                 batch = self.page.evaluate('''() => {
-                    const feed = document.querySelector('[data-testid="mainFeed"], [data-component-type="LazyColumn"], main');
-                    if (!feed) return [];
-                    const items = feed.querySelectorAll('[data-lazy-mount-id], [role="listitem"], div.feed-shared-update-v2');
+                    const items = document.querySelectorAll('div.feed-shared-update-v2, div[data-urn*="activity"], div.occludable-update, [data-lazy-mount-id], [role="listitem"]');
                     const results = [];
                     items.forEach(el => {
                         const text = el.innerText || '';
@@ -122,12 +120,17 @@ class FeedHarvester:
             except Exception:
                 pass
 
-            # 3. Scroll down to trigger lazy loading of next cards
+            # 3. Authentic input-driven scrolling to trigger LinkedIn infinite scroll loader
             try:
-                self.page.evaluate("window.scrollBy(0, 900);")
-                human_delay(1.2, 1.8)
+                self.page.mouse.wheel(0, 1100)
+                self.page.keyboard.press("PageDown")
+                human_delay(1.5, 2.2)
             except Exception:
-                pass
+                try:
+                    self.page.evaluate("window.scrollBy(0, 1000);")
+                    human_delay(1.5, 2.0)
+                except Exception:
+                    pass
 
         self._log(f"Analyzed feed: Loaded {len(raw_items)} distinct post cards across 10 scroll passes. Filtering for opportunities...")
 

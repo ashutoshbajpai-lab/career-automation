@@ -17,8 +17,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 FEED_LEADS_JSON = os.path.join(DATA_DIR, "feed_leads.json")
 PENDING_FORMS_JSON = os.path.join(DATA_DIR, "pending_forms.json")
+FEED_POSTS_JSON = os.path.join(DATA_DIR, "feed_posts.json")
+EASY_APPLY_JOBS_JSON = os.path.join(DATA_DIR, "easy_apply_jobs.json")
 RECRUITER_LEADS_JSON = os.path.join(DATA_DIR, "recruiter_leads.json")
 DISMISSED_FORMS_JSON = os.path.join(DATA_DIR, "dismissed_forms.json")
+DISMISSED_EASY_APPLY_JSON = os.path.join(DATA_DIR, "dismissed_easy_apply.json")
 DISMISSED_RECRUITERS_JSON = os.path.join(DATA_DIR, "dismissed_recruiters.json")
 
 CANDIDATE_NAME = "Ashutosh Bajpai"
@@ -256,15 +259,80 @@ def sync_leads():
                         "context": preview[:180]
                     })
 
-    # Save to disk
+    # Partition into Feed Posts (from feed scrolling) vs Easy Apply Job Postings
+    dismissed_easy_apply = set()
+    if os.path.exists(DISMISSED_EASY_APPLY_JSON):
+        try:
+            with open(DISMISSED_EASY_APPLY_JSON, "r", encoding="utf-8") as f:
+                dismissed_easy_apply = set(json.load(f))
+        except Exception:
+            pass
+
+    feed_posts_list = []
+    easy_apply_list = []
+
+    for item in pending_forms:
+        url = item.get("form_url", "")
+        ctx = item.get("context", "")
+        tags = item.get("tags", [])
+
+        # Check if item is a Job Search / Easy Apply listing
+        is_job_posting = (
+            "linkedin.com/jobs" in url or
+            "Verified Public Role" in tags or
+            ctx.startswith("Role: ") or
+            "linkedin.com/jobs/view" in item.get("post_url", "")
+        )
+
+        if is_job_posting:
+            if item.get("id") in dismissed_easy_apply or url in dismissed_easy_apply:
+                continue
+            role = "Analyst"
+            company = item.get("poster", "Company")
+            location = "India"
+            if ctx.startswith("Role: "):
+                parts = ctx.replace("Role: ", "").split(" at ")
+                if len(parts) >= 2:
+                    role = parts[0].strip()
+                    rem = parts[1].split("(")
+                    company = rem[0].strip()
+                    if len(rem) > 1:
+                        location = rem[1].split(")")[0].strip()
+
+            easy_apply_list.append({
+                "id": item.get("id"),
+                "timestamp": item.get("timestamp"),
+                "company": company,
+                "title": role,
+                "location": location,
+                "experience": "0-2 Yrs",
+                "job_url": url,
+                "status": "Easy Apply Available",
+                "tags": ["Easy Apply", "0-2 Yrs"]
+            })
+        else:
+            feed_posts_list.append(item)
+
+    # Save partitioned datasets to disk
+    with open(FEED_POSTS_JSON, "w", encoding="utf-8") as f:
+        json.dump(feed_posts_list, f, indent=2)
+
+    with open(EASY_APPLY_JOBS_JSON, "w", encoding="utf-8") as f:
+        json.dump(easy_apply_list, f, indent=2)
+
     with open(PENDING_FORMS_JSON, "w", encoding="utf-8") as f:
         json.dump(pending_forms, f, indent=2)
 
     with open(RECRUITER_LEADS_JSON, "w", encoding="utf-8") as f:
         json.dump(recruiter_leads, f, indent=2)
 
-    logger.info(f"Synced {len(pending_forms)} pending application forms and {len(recruiter_leads)} recruiter leads.")
-    return {"forms": pending_forms, "emails": recruiter_leads}
+    logger.info(f"Synced {len(feed_posts_list)} feed posts, {len(easy_apply_list)} easy apply jobs, and {len(recruiter_leads)} recruiter leads.")
+    return {
+        "forms": pending_forms,
+        "feed_posts": feed_posts_list,
+        "easy_apply_jobs": easy_apply_list,
+        "emails": recruiter_leads
+    }
 
 
 def dismiss_pending_form(form_id: str = None, form_url: str = None) -> bool:
@@ -387,6 +455,132 @@ def dismiss_pending_forms_batch(form_ids: list) -> int:
     with open(DISMISSED_FORMS_JSON, "w", encoding="utf-8") as f:
         json.dump(list(dismissed_forms), f, indent=2)
 
+    return removed_count
+
+
+def dismiss_easy_apply_job(job_id: str = None, job_url: str = None) -> bool:
+    """Removes an Easy Apply job listing and blacklists it from reappearing."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    easy_apply = []
+    if os.path.exists(EASY_APPLY_JOBS_JSON):
+        try:
+            with open(EASY_APPLY_JOBS_JSON, "r", encoding="utf-8") as f:
+                easy_apply = json.load(f)
+        except Exception:
+            easy_apply = []
+
+    dismissed = set()
+    if os.path.exists(DISMISSED_EASY_APPLY_JSON):
+        try:
+            with open(DISMISSED_EASY_APPLY_JSON, "r", encoding="utf-8") as f:
+                dismissed = set(json.load(f))
+        except Exception:
+            pass
+
+    remaining = []
+    for item in easy_apply:
+        if (job_id and str(item.get("id")) == str(job_id)) or (job_url and item.get("job_url") == job_url):
+            if item.get("job_url"):
+                dismissed.add(item.get("job_url"))
+            if item.get("id"):
+                dismissed.add(str(item.get("id")))
+        else:
+            remaining.append(item)
+
+    if job_url:
+        dismissed.add(job_url)
+    if job_id:
+        dismissed.add(str(job_id))
+
+    with open(EASY_APPLY_JOBS_JSON, "w", encoding="utf-8") as f:
+        json.dump(remaining, f, indent=2)
+
+    with open(DISMISSED_EASY_APPLY_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed), f, indent=2)
+
+    # Also remove from general pending_forms for consistency
+    dismiss_pending_form(form_id=job_id, form_url=job_url)
+    return True
+
+
+def clear_all_easy_apply() -> int:
+    """Clears all easy apply jobs and blacklists them."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    easy_apply = []
+    if os.path.exists(EASY_APPLY_JOBS_JSON):
+        try:
+            with open(EASY_APPLY_JOBS_JSON, "r", encoding="utf-8") as f:
+                easy_apply = json.load(f)
+        except Exception:
+            easy_apply = []
+
+    dismissed = set()
+    if os.path.exists(DISMISSED_EASY_APPLY_JSON):
+        try:
+            with open(DISMISSED_EASY_APPLY_JSON, "r", encoding="utf-8") as f:
+                dismissed = set(json.load(f))
+        except Exception:
+            pass
+
+    for item in easy_apply:
+        if item.get("job_url"):
+            dismissed.add(item.get("job_url"))
+        if item.get("id"):
+            dismissed.add(str(item.get("id")))
+
+    count = len(easy_apply)
+    with open(EASY_APPLY_JOBS_JSON, "w", encoding="utf-8") as f:
+        json.dump([], f, indent=2)
+
+    with open(DISMISSED_EASY_APPLY_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed), f, indent=2)
+
+    return count
+
+
+def dismiss_easy_apply_batch(job_ids: list) -> int:
+    """Removes multiple easy apply jobs by their IDs."""
+    if not job_ids:
+        return 0
+    os.makedirs(DATA_DIR, exist_ok=True)
+    id_set = set(str(i) for i in job_ids)
+
+    easy_apply = []
+    if os.path.exists(EASY_APPLY_JOBS_JSON):
+        try:
+            with open(EASY_APPLY_JOBS_JSON, "r", encoding="utf-8") as f:
+                easy_apply = json.load(f)
+        except Exception:
+            easy_apply = []
+
+    dismissed = set()
+    if os.path.exists(DISMISSED_EASY_APPLY_JSON):
+        try:
+            with open(DISMISSED_EASY_APPLY_JSON, "r", encoding="utf-8") as f:
+                dismissed = set(json.load(f))
+        except Exception:
+            pass
+
+    remaining = []
+    removed_count = 0
+    for item in easy_apply:
+        if str(item.get("id")) in id_set:
+            removed_count += 1
+            if item.get("job_url"):
+                dismissed.add(item.get("job_url"))
+            if item.get("id"):
+                dismissed.add(str(item.get("id")))
+        else:
+            remaining.append(item)
+
+    with open(EASY_APPLY_JOBS_JSON, "w", encoding="utf-8") as f:
+        json.dump(remaining, f, indent=2)
+
+    with open(DISMISSED_EASY_APPLY_JSON, "w", encoding="utf-8") as f:
+        json.dump(list(dismissed), f, indent=2)
+
+    # Also remove from general pending_forms
+    dismiss_pending_forms_batch(job_ids)
     return removed_count
 
 

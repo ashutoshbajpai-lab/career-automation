@@ -32,9 +32,10 @@ from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
 from recruitment_dispatcher import (
-    sync_leads, PENDING_FORMS_JSON, RECRUITER_LEADS_JSON, 
+    sync_leads, PENDING_FORMS_JSON, FEED_POSTS_JSON, EASY_APPLY_JOBS_JSON, RECRUITER_LEADS_JSON, 
     dismiss_pending_form, clear_all_pending_forms, dismiss_recruiter_lead,
-    dismiss_pending_forms_batch, dismiss_recruiter_leads_batch
+    dismiss_pending_forms_batch, dismiss_recruiter_leads_batch,
+    dismiss_easy_apply_job, clear_all_easy_apply, dismiss_easy_apply_batch
 )
 from company_network_expander import CompanyNetworkExpander
 from feed_harvester import FeedHarvester
@@ -141,6 +142,22 @@ def get_stats():
         except Exception:
             pass
 
+    feed_posts = []
+    if os.path.exists(FEED_POSTS_JSON):
+        try:
+            with open(FEED_POSTS_JSON, "r", encoding="utf-8") as f:
+                feed_posts = json.load(f)
+        except Exception:
+            pass
+
+    easy_apply_jobs = []
+    if os.path.exists(EASY_APPLY_JOBS_JSON):
+        try:
+            with open(EASY_APPLY_JOBS_JSON, "r", encoding="utf-8") as f:
+                easy_apply_jobs = json.load(f)
+        except Exception:
+            pass
+
     recruiter_leads = []
     if os.path.exists(RECRUITER_LEADS_JSON):
         try:
@@ -186,6 +203,8 @@ def get_stats():
         "manual_count": len(manual_items),
         "email_intel_count": len(email_intel),
         "pending_forms_count": len(pending_forms),
+        "feed_posts_count": len(feed_posts),
+        "easy_apply_count": len(easy_apply_jobs),
         "recruiter_leads_count": len(recruiter_leads),
         "outreach_count": len(outreach_records),
         "naukri_boost": boost_status,
@@ -258,13 +277,21 @@ MERAKI_UI_HTML = """
               </div>
               <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700" id="sidebarGmailBadge">0</span>
             </button>
-            <button onclick="switchTab('forms')" id="nav-forms"
+            <button onclick="switchTab('feed')" id="nav-feed"
                     class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
               <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-file-pen w-4 text-teal-600"></i>
-                <span>Pending Forms</span>
+                <i class="fa-solid fa-rss w-4 text-teal-600"></i>
+                <span>Feed Hiring Posts</span>
               </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700" id="sidebarFormsBadge">0</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700" id="sidebarFeedBadge">0</span>
+            </button>
+            <button onclick="switchTab('easy-apply')" id="nav-easy-apply"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-bolt-lightning w-4 text-blue-600"></i>
+                <span>Easy Apply & Jobs</span>
+              </div>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700" id="sidebarEasyApplyBadge">0</span>
             </button>
             <button onclick="switchTab('recruiters')" id="nav-recruiters"
                     class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
@@ -476,45 +503,45 @@ MERAKI_UI_HTML = """
             </div>
           </div>
 
-          <!-- Card 2: Gmail In-Progress Updates -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('gmail')">
+          <!-- Card 2: Feed Hiring Posts -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('feed')">
             <div>
-              <p class="text-xs font-semibold text-slate-400">In-Progress Emails</p>
+              <p class="text-xs font-semibold text-slate-400">Feed Hiring Posts</p>
               <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardGmailCount">51</h3>
-                <span class="text-xs font-semibold text-purple-500">Inbox Intel</span>
+                <h3 class="text-2xl font-bold text-slate-900" id="cardFeedCount">0</h3>
+                <span class="text-xs font-semibold text-teal-600">Google & Forms</span>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center text-white shadow-md shadow-purple-600/30">
-              <i class="fa-solid fa-envelope-open-text text-lg"></i>
+            <div class="w-12 h-12 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shadow-teal-600/30">
+              <i class="fa-solid fa-rss text-lg"></i>
             </div>
           </div>
 
-          <!-- Card 3: Manual Queue & Pending Forms -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('manual')">
+          <!-- Card 3: Easy Apply & Target Jobs -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('easy-apply')">
             <div>
-              <p class="text-xs font-semibold text-slate-400">Manual Desk & Forms</p>
+              <p class="text-xs font-semibold text-slate-400">Easy Apply & Jobs</p>
               <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardManualCount">12</h3>
-                <span class="text-xs font-semibold text-rose-500">Requires Action</span>
+                <h3 class="text-2xl font-bold text-slate-900" id="cardEasyApplyCount">0</h3>
+                <span class="text-xs font-semibold text-blue-600">0-2 Yrs Roles</span>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-rose-500 flex items-center justify-center text-white shadow-md shadow-rose-500/30">
-              <i class="fa-solid fa-clipboard-list text-lg"></i>
+            <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
+              <i class="fa-solid fa-bolt-lightning text-lg"></i>
             </div>
           </div>
 
           <!-- Card 4: Recruiter Outreach & Leads -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('alumni')">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('recruiters')">
             <div>
-              <p class="text-xs font-semibold text-slate-400">Direct Outreaches</p>
+              <p class="text-xs font-semibold text-slate-400">Recruiter Emails</p>
               <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardOutreachCount">2</h3>
-                <span class="text-xs font-semibold text-indigo-500">Delivered</span>
+                <h3 class="text-2xl font-bold text-slate-900" id="cardRecruiterCount">0</h3>
+                <span class="text-xs font-semibold text-sky-500">Drafts Ready</span>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/30">
-              <i class="fa-solid fa-users text-lg"></i>
+            <div class="w-12 h-12 rounded-xl bg-sky-500 flex items-center justify-center text-white shadow-md shadow-sky-500/30">
+              <i class="fa-solid fa-envelope-open-text text-lg"></i>
             </div>
           </div>
 
@@ -733,24 +760,24 @@ MERAKI_UI_HTML = """
       </div>
 
       <!-- ========================================== -->
-      <!-- TAB 3: APPLICATION FORMS PENDING           -->
+      <!-- TAB 3A: LINKEDIN FEED POSTS & FORMS DESK   -->
       <!-- ========================================== -->
-      <div id="view-forms" class="hidden space-y-6">
+      <div id="view-feed" class="hidden space-y-6">
         <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
           <div class="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
-                <i class="fa-solid fa-file-pen text-teal-600"></i>
-                <span>Application Forms Pending (Google Forms & Typeforms)</span>
+                <i class="fa-solid fa-rss text-teal-600"></i>
+                <span>LinkedIn Feed Posts &amp; Hiring Forms</span>
               </h3>
-              <p class="text-xs text-slate-400">Hiring vacancy posts containing direct Google Forms or Typeforms. Saved here for your manual application.</p>
+              <p class="text-xs text-slate-400">Posts discovered exclusively from scrolling your LinkedIn feed (founders, PMs, and recruiters sharing Google Forms, Typeforms, or hiring calls).</p>
             </div>
             <div class="flex items-center gap-2">
-              <button id="btnDeleteSelectedForms" onclick="deleteSelectedForms()" class="hidden px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer">
+              <button id="btnDeleteSelectedFeed" onclick="deleteSelectedFeedPosts()" class="hidden px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer">
                 <i class="fa-solid fa-trash-can text-xs"></i>
-                <span>Delete Selected (<span id="selectedFormsCount">0</span>)</span>
+                <span>Delete Selected (<span id="selectedFeedCount">0</span>)</span>
               </button>
-              <button onclick="clearAllPendingForms()" title="Clear all pending forms from desk" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-200 transition cursor-pointer">
+              <button onclick="clearAllFeedPosts()" title="Clear all feed posts from desk" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-200 transition cursor-pointer">
                 <i class="fa-solid fa-trash-can text-xs"></i>
                 <span>Clear All</span>
               </button>
@@ -765,7 +792,7 @@ MERAKI_UI_HTML = """
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th class="p-3 w-8"><input type="checkbox" id="selectAllForms" onchange="toggleSelectAllForms(this)" class="rounded text-teal-600 cursor-pointer"></th>
+                  <th class="p-3 w-8"><input type="checkbox" id="selectAllFeed" onchange="toggleSelectAllFeed(this)" class="rounded text-teal-600 cursor-pointer"></th>
                   <th class="p-3">Detected</th>
                   <th class="p-3">Poster / Company</th>
                   <th class="p-3">Context &amp; Tags</th>
@@ -773,13 +800,62 @@ MERAKI_UI_HTML = """
                   <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-100" id="pendingFormsTableBody">
-                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading pending forms...</td></tr>
+              <tbody class="divide-y divide-slate-100" id="feedPostsTableBody">
+                <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading feed hiring posts...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      <!-- ========================================== -->
+      <!-- TAB 3B: EASY APPLY & TARGET JOB LISTINGS   -->
+      <!-- ========================================== -->
+      <div id="view-easy-apply" class="hidden space-y-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <i class="fa-solid fa-bolt-lightning text-blue-600"></i>
+                <span>Easy Apply &amp; Target Job Board Desk</span>
+              </h3>
+              <p class="text-xs text-slate-400">Curated 0-2 yrs entry-level Analyst &amp; APM roles from LinkedIn Jobs &amp; verified openings ready for direct or Easy Apply.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnDeleteSelectedJobs" onclick="deleteSelectedEasyApplyJobs()" class="hidden px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-rose-600/30 transition cursor-pointer">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Delete Selected (<span id="selectedJobsCount">0</span>)</span>
+              </button>
+              <button onclick="clearAllEasyApplyJobs()" title="Clear all easy apply jobs from desk" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-200 transition cursor-pointer">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+                <span>Clear All</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3 w-8"><input type="checkbox" id="selectAllEasyApply" onchange="toggleSelectAllEasyApply(this)" class="rounded text-blue-600 cursor-pointer"></th>
+                  <th class="p-3">Detected</th>
+                  <th class="p-3">Target Company</th>
+                  <th class="p-3">Role Title</th>
+                  <th class="p-3">Location &amp; Exp</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="easyApplyTableBody">
+                <tr><td colspan="7" class="p-6 text-center text-slate-400">Loading Easy Apply openings...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legacy alias view-forms for compatibility -->
+      <div id="view-forms" class="hidden"></div>
 
       <!-- ========================================== -->
       <!-- TAB 4: RECRUITER EMAIL LEADS               -->
@@ -1259,6 +1335,7 @@ MERAKI_UI_HTML = """
     const candidateName = "Ashutosh Bajpai";
 
     function switchTab(tabId) {
+      if (tabId === 'forms') tabId = 'feed';
       activeTab = tabId;
       document.querySelectorAll('.nav-item').forEach(el => {
         el.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition";
@@ -1268,7 +1345,7 @@ MERAKI_UI_HTML = """
         activeNav.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm";
       }
 
-      ['dashboard', 'gmail', 'forms', 'recruiters', 'alumni', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
+      ['dashboard', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
         const el = document.getElementById(`view-${t}`);
         if (el) el.classList.toggle('hidden', t !== tabId);
       });
@@ -1276,7 +1353,9 @@ MERAKI_UI_HTML = """
       const headingMap = {
         dashboard: 'Executive Dashboard',
         gmail: 'Gmail Inbox Intelligence',
-        forms: 'Application Forms Pending',
+        feed: 'LinkedIn Feed Posts & Forms Desk',
+        'easy-apply': 'Easy Apply & Target Job Listings Desk',
+        forms: 'LinkedIn Feed Posts & Forms Desk',
         recruiters: 'Harvested Recruiter Emails',
         alumni: 'PEC Alumni & Referral Outreach',
         naukri: 'Naukri Daily Recency Booster',
@@ -1294,13 +1373,15 @@ MERAKI_UI_HTML = """
         const res = await fetch('/api/stats');
         const d = await res.json();
         document.getElementById('cardTodayCount').innerText = d.total_today;
-        document.getElementById('cardGmailCount').innerText = d.email_intel_count;
-        document.getElementById('cardManualCount').innerText = d.manual_count;
-        document.getElementById('cardOutreachCount').innerText = d.outreach_count;
+        if (document.getElementById('cardFeedCount')) document.getElementById('cardFeedCount').innerText = d.feed_posts_count ?? d.pending_forms_count ?? 0;
+        if (document.getElementById('cardEasyApplyCount')) document.getElementById('cardEasyApplyCount').innerText = d.easy_apply_count ?? 0;
+        if (document.getElementById('cardRecruiterCount')) document.getElementById('cardRecruiterCount').innerText = d.recruiter_leads_count ?? 0;
 
         document.getElementById('sidebarManualBadge').innerText = d.manual_count;
         document.getElementById('sidebarGmailBadge').innerText = d.email_intel_count;
-        document.getElementById('sidebarFormsBadge').innerText = d.pending_forms_count;
+        if (document.getElementById('sidebarFeedBadge')) document.getElementById('sidebarFeedBadge').innerText = d.feed_posts_count ?? 0;
+        if (document.getElementById('sidebarEasyApplyBadge')) document.getElementById('sidebarEasyApplyBadge').innerText = d.easy_apply_count ?? 0;
+        if (document.getElementById('sidebarFormsBadge')) document.getElementById('sidebarFormsBadge').innerText = d.feed_posts_count ?? 0;
         document.getElementById('sidebarRecruitersBadge').innerText = d.recruiter_leads_count;
 
         document.getElementById('metricNaukri').innerText = d.naukri_today;
@@ -1493,31 +1574,34 @@ MERAKI_UI_HTML = """
       }
     }
 
-    // Pending Forms
-    async function loadPendingForms() {
+    // ==========================================
+    // 1. LINKEDIN FEED POSTS & FORMS DESK
+    // ==========================================
+    async function loadFeedPosts() {
       try {
-        const res = await fetch('/api/pending_forms');
+        const res = await fetch('/api/feed_posts');
         const d = await res.json();
-        const tbody = document.getElementById('pendingFormsTableBody');
+        const tbody = document.getElementById('feedPostsTableBody') || document.getElementById('pendingFormsTableBody');
         if (!tbody) return;
 
-        if (!d.forms || !d.forms.length) {
-          tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No application forms pending.</td></tr>`;
-          updateSelectedFormsCount();
+        const posts = d.posts || [];
+        if (!posts.length) {
+          tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No feed hiring posts currently pending.</td></tr>`;
+          updateSelectedFeedCount();
           return;
         }
 
-        tbody.innerHTML = d.forms.map(f => {
-          const tags = f.tags || ['Recruiting (0-2 Yrs)'];
+        tbody.innerHTML = posts.map(f => {
+          const tags = f.tags || ['Feed Post', '0-2 Yrs'];
           const tagsHtml = tags.map(t => {
             const isComment = t.includes('Comment');
-            return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isComment ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${t}</span>`;
+            return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isComment ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-teal-100 text-teal-800 border border-teal-200'}">${t}</span>`;
           }).join(' ');
 
           return `
             <tr class="hover:bg-slate-50 transition">
               <td class="p-3">
-                <input type="checkbox" class="form-checkbox-item rounded text-teal-600 cursor-pointer" value="${f.id}" onchange="updateSelectedFormsCount()">
+                <input type="checkbox" class="feed-checkbox-item rounded text-teal-600 cursor-pointer" value="${f.id}" onchange="updateSelectedFeedCount()">
               </td>
               <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
               <td class="p-3 font-bold text-slate-900">
@@ -1532,21 +1616,21 @@ MERAKI_UI_HTML = """
                 <div class="truncate text-xs text-slate-600" title="${f.context}">${f.context}</div>
               </td>
               <td class="p-3">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status || 'Pending Form Fill'}</span>
               </td>
               <td class="p-3 text-right whitespace-nowrap">
                 <div class="inline-flex items-center gap-1.5 justify-end">
                   <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post where this form was shared"
                      class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
                     <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
-                    <span>View Source Post ↗</span>
+                    <span>Source Post ↗</span>
                   </a>
                   <a href="${f.form_url}" target="_blank"
                      class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
                     <span>Open &amp; Fill Form</span>
                     <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                   </a>
-                  <button onclick="removePendingForm('${f.id}')" title="Dismiss / Remove this form"
+                  <button onclick="removeFeedPost('${f.id}')" title="Dismiss / Remove this post"
                           class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
                     <i class="fa-solid fa-trash-can text-xs"></i>
                     <span>Remove</span>
@@ -1556,19 +1640,19 @@ MERAKI_UI_HTML = """
             </tr>
           `;
         }).join('');
-        updateSelectedFormsCount();
+        updateSelectedFeedCount();
       } catch (e) {}
     }
 
-    function toggleSelectAllForms(master) {
-      document.querySelectorAll('.form-checkbox-item').forEach(cb => cb.checked = master.checked);
-      updateSelectedFormsCount();
+    function toggleSelectAllFeed(master) {
+      document.querySelectorAll('.feed-checkbox-item').forEach(cb => cb.checked = master.checked);
+      updateSelectedFeedCount();
     }
 
-    function updateSelectedFormsCount() {
-      const selected = Array.from(document.querySelectorAll('.form-checkbox-item:checked')).map(cb => cb.value);
-      const btn = document.getElementById('btnDeleteSelectedForms');
-      const countSpan = document.getElementById('selectedFormsCount');
+    function updateSelectedFeedCount() {
+      const selected = Array.from(document.querySelectorAll('.feed-checkbox-item:checked')).map(cb => cb.value);
+      const btn = document.getElementById('btnDeleteSelectedFeed') || document.getElementById('btnDeleteSelectedForms');
+      const countSpan = document.getElementById('selectedFeedCount') || document.getElementById('selectedFormsCount');
       if (countSpan) countSpan.innerText = selected.length;
       if (btn) {
         if (selected.length > 0) btn.classList.remove('hidden');
@@ -1576,19 +1660,184 @@ MERAKI_UI_HTML = """
       }
     }
 
-    async function deleteSelectedForms() {
-      const selected = Array.from(document.querySelectorAll('.form-checkbox-item:checked')).map(cb => cb.value);
+    async function deleteSelectedFeedPosts() {
+      const selected = Array.from(document.querySelectorAll('.feed-checkbox-item:checked')).map(cb => cb.value);
       if (!selected.length) return;
-      if (!confirm(`Delete ${selected.length} selected pending forms from your desk?`)) return;
+      if (!confirm(`Delete ${selected.length} selected feed posts from your desk?`)) return;
       try {
-        const res = await fetch('/api/pending_forms/delete_batch', {
+        const res = await fetch('/api/feed_posts/delete_batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: selected })
         });
         const d = await res.json();
         if (d.success) {
-          loadPendingForms();
+          loadFeedPosts();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function removeFeedPost(postId) {
+      if (!confirm("Remove this feed post from your desk?")) return;
+      try {
+        const res = await fetch('/api/feed_posts/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: postId })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadFeedPosts();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function clearAllFeedPosts() {
+      if (!confirm("Are you sure you want to remove ALL feed posts from your desk?")) return;
+      try {
+        const res = await fetch('/api/feed_posts/clear_all', { method: 'POST' });
+        const d = await res.json();
+        if (d.success) {
+          loadFeedPosts();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    // Alias for backwards compatibility
+    const loadPendingForms = loadFeedPosts;
+    const removePendingForm = removeFeedPost;
+    const clearAllPendingForms = clearAllFeedPosts;
+    const deleteSelectedForms = deleteSelectedFeedPosts;
+    const toggleSelectAllForms = toggleSelectAllFeed;
+
+    // ==========================================
+    // 2. EASY APPLY & TARGET JOB LISTINGS DESK
+    // ==========================================
+    async function loadEasyApplyJobs() {
+      try {
+        const res = await fetch('/api/easy_apply_jobs');
+        const d = await res.json();
+        const tbody = document.getElementById('easyApplyTableBody');
+        if (!tbody) return;
+
+        const jobs = d.jobs || [];
+        if (!jobs.length) {
+          tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">No Easy Apply jobs currently queued.</td></tr>`;
+          updateSelectedJobsCount();
+          return;
+        }
+
+        tbody.innerHTML = jobs.map(j => {
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="p-3">
+                <input type="checkbox" class="job-checkbox-item rounded text-blue-600 cursor-pointer" value="${j.id}" onchange="updateSelectedJobsCount()">
+              </td>
+              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${j.timestamp}</td>
+              <td class="p-3 font-bold text-slate-900">
+                <div class="text-sm font-bold text-slate-900">${j.company}</div>
+              </td>
+              <td class="p-3 text-slate-700 font-semibold">${j.title}</td>
+              <td class="p-3 text-slate-600">
+                <div class="text-xs">${j.location}</div>
+                <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 mt-0.5">${j.experience}</span>
+              </td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  <i class="fa-solid fa-bolt mr-1"></i>${j.status}
+                </span>
+              </td>
+              <td class="p-3 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1.5 justify-end">
+                  <a href="${j.job_url}" target="_blank"
+                     class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-blue-600/20">
+                    <i class="fa-brands fa-linkedin text-white"></i>
+                    <span>View &amp; Apply ↗</span>
+                  </a>
+                  <button onclick="removeEasyApplyJob('${j.id}')" title="Dismiss this job"
+                          class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                    <span>Remove</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        updateSelectedJobsCount();
+      } catch (e) {}
+    }
+
+    function toggleSelectAllEasyApply(master) {
+      document.querySelectorAll('.job-checkbox-item').forEach(cb => cb.checked = master.checked);
+      updateSelectedJobsCount();
+    }
+
+    function updateSelectedJobsCount() {
+      const selected = Array.from(document.querySelectorAll('.job-checkbox-item:checked')).map(cb => cb.value);
+      const btn = document.getElementById('btnDeleteSelectedJobs');
+      const countSpan = document.getElementById('selectedJobsCount');
+      if (countSpan) countSpan.innerText = selected.length;
+      if (btn) {
+        if (selected.length > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+      }
+    }
+
+    async function deleteSelectedEasyApplyJobs() {
+      const selected = Array.from(document.querySelectorAll('.job-checkbox-item:checked')).map(cb => cb.value);
+      if (!selected.length) return;
+      if (!confirm(`Delete ${selected.length} selected Easy Apply job postings?`)) return;
+      try {
+        const res = await fetch('/api/easy_apply_jobs/delete_batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: selected })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadEasyApplyJobs();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function removeEasyApplyJob(jobId) {
+      if (!confirm("Remove this job posting from your Easy Apply desk?")) return;
+      try {
+        const res = await fetch('/api/easy_apply_jobs/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: jobId })
+        });
+        const d = await res.json();
+        if (d.success) {
+          loadEasyApplyJobs();
+          pollDashboardData();
+        }
+      } catch (e) {
+        alert("Network error: " + e);
+      }
+    }
+
+    async function clearAllEasyApplyJobs() {
+      if (!confirm("Are you sure you want to remove ALL Easy Apply jobs from your desk?")) return;
+      try {
+        const res = await fetch('/api/easy_apply_jobs/clear_all', { method: 'POST' });
+        const d = await res.json();
+        if (d.success) {
+          loadEasyApplyJobs();
           pollDashboardData();
         }
       } catch (e) {
@@ -2323,7 +2572,8 @@ MERAKI_UI_HTML = """
     setInterval(pollLogs, 1500);
     setInterval(loadManualTable, 5000);
     setInterval(loadGmailIntel, 6000);
-    setInterval(loadPendingForms, 6000);
+    setInterval(loadFeedPosts, 6000);
+    setInterval(loadEasyApplyJobs, 6000);
     setInterval(loadRecruiterLeads, 6000);
     setInterval(loadNaukriApplied, 6000);
     setInterval(loadOutreachHistory, 5000);
@@ -2333,7 +2583,8 @@ MERAKI_UI_HTML = """
     pollLogs();
     loadManualTable();
     loadGmailIntel();
-    loadPendingForms();
+    loadFeedPosts();
+    loadEasyApplyJobs();
     loadRecruiterLeads();
     loadNaukriApplied();
     loadOutreachHistory();
@@ -2442,6 +2693,82 @@ def inbox_intel():
 def screening_passed():
     tracker = EmailTracker()
     return jsonify({"opportunities": tracker.get_screening_passed()})
+
+
+@app.route("/api/feed_posts")
+def feed_posts_route():
+    res = sync_leads()
+    return jsonify({"posts": res.get("feed_posts", [])})
+
+
+@app.route("/api/feed_posts/remove", methods=["POST"])
+def remove_feed_post_route():
+    data = request.json or {}
+    form_id = data.get("id")
+    form_url = data.get("form_url")
+    if not form_id and not form_url:
+        return jsonify({"success": False, "error": "Missing form id or url"}), 400
+    dismiss_pending_form(form_id=form_id, form_url=form_url)
+    res = sync_leads()
+    add_log(f"🗑️ Feed post {form_id or form_url} removed from desk.")
+    return jsonify({"success": True, "remaining_count": len(res.get("feed_posts", []))})
+
+
+@app.route("/api/feed_posts/clear_all", methods=["POST"])
+def clear_all_feed_posts_route():
+    cleared = clear_all_pending_forms()
+    add_log(f"🗑️ Cleared all {cleared} feed posts from desk.")
+    return jsonify({"success": True, "cleared_count": cleared})
+
+
+@app.route("/api/feed_posts/delete_batch", methods=["POST"])
+def delete_feed_posts_batch_route():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "error": "No IDs provided"}), 400
+    removed = dismiss_pending_forms_batch(ids)
+    res = sync_leads()
+    add_log(f"🗑️ Removed {removed} selected feed posts from desk.")
+    return jsonify({"success": True, "removed_count": removed, "remaining_count": len(res.get("feed_posts", []))})
+
+
+@app.route("/api/easy_apply_jobs")
+def easy_apply_jobs_route():
+    res = sync_leads()
+    return jsonify({"jobs": res.get("easy_apply_jobs", [])})
+
+
+@app.route("/api/easy_apply_jobs/remove", methods=["POST"])
+def remove_easy_apply_job_route():
+    data = request.json or {}
+    job_id = data.get("id")
+    job_url = data.get("job_url")
+    if not job_id and not job_url:
+        return jsonify({"success": False, "error": "Missing job id or url"}), 400
+    dismiss_easy_apply_job(job_id=job_id, job_url=job_url)
+    res = sync_leads()
+    add_log(f"🗑️ Easy Apply job {job_id or job_url} removed from desk.")
+    return jsonify({"success": True, "remaining_count": len(res.get("easy_apply_jobs", []))})
+
+
+@app.route("/api/easy_apply_jobs/clear_all", methods=["POST"])
+def clear_all_easy_apply_jobs_route():
+    cleared = clear_all_easy_apply()
+    add_log(f"🗑️ Cleared all {cleared} Easy Apply jobs from desk.")
+    return jsonify({"success": True, "cleared_count": cleared})
+
+
+@app.route("/api/easy_apply_jobs/delete_batch", methods=["POST"])
+def delete_easy_apply_batch_route():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"success": False, "error": "No IDs provided"}), 400
+    removed = dismiss_easy_apply_batch(ids)
+    res = sync_leads()
+    add_log(f"🗑️ Removed {removed} selected Easy Apply jobs from desk.")
+    return jsonify({"success": True, "removed_count": removed, "remaining_count": len(res.get("easy_apply_jobs", []))})
 
 
 @app.route("/api/pending_forms")

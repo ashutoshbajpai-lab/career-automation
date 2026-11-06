@@ -2513,40 +2513,6 @@ MERAKI_UI_HTML = """
       }
     }
 
-    async function removePendingForm(formId) {
-      if (!confirm("Remove this pending application form from your desk?")) return;
-      try {
-        const res = await fetch('/api/pending_forms/remove', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: formId })
-        });
-        const d = await res.json();
-        if (d.success) {
-          loadPendingForms();
-          pollDashboardData();
-        } else {
-          alert("Error: " + (d.error || "Could not remove form"));
-        }
-      } catch (e) {
-        alert("Network error: " + e);
-      }
-    }
-
-    async function clearAllPendingForms() {
-      if (!confirm("Are you sure you want to remove ALL pending forms from your desk?")) return;
-      try {
-        const res = await fetch('/api/pending_forms/clear_all', { method: 'POST' });
-        const d = await res.json();
-        if (d.success) {
-          loadPendingForms();
-          pollDashboardData();
-        }
-      } catch (e) {
-        alert("Network error: " + e);
-      }
-    }
-
     async function removeRecruiterLead(leadId) {
       if (!confirm("Remove this recruiter lead from your desk?")) return;
       try {

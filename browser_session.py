@@ -123,7 +123,7 @@ class BrowserManager:
                 "--disable-gpu-compositing",
                 "--use-gl=disabled",
                 "--disable-software-rasterizer",
-                "--blink-settings=imagesEnabled=false",
+                "--headless=new",
                 "--renderer-process-limit=1",
                 "--no-zygote",
                 "--mute-audio",
@@ -192,16 +192,8 @@ class BrowserManager:
             Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
         """)
 
-        try:
-            page.set_extra_http_headers({
-                "Accept-Language": "en-US,en;q=0.9",
-                "Sec-Ch-Ua": '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-                "Sec-Ch-Ua-Mobile": "?0",
-                "Sec-Ch-Ua-Platform": '"macOS"',
-                "Upgrade-Insecure-Requests": "1"
-            })
-        except Exception:
-            pass
+        # Note: Do NOT set page.set_extra_http_headers with custom CORS-triggering headers.
+        # Chromium already provides standard headers matching user_agent and locale.
 
         return self.context, page
 

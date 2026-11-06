@@ -43,8 +43,9 @@ CANDIDATE_SUMMARY_SHORT = (
 
 def is_target_experience(exp_str: str) -> bool:
     """
-    Filters strictly for roles matching 0-3, 1-2, 0-2, 0-1 years.
-    Rejects roles requiring > 3 years (e.g. 0-5, 3-5, 4-8, 5-10 yrs).
+    Filters for roles open to junior candidates (0-1, 0-2, 1-2, 0-3, 0-4 yrs).
+    Rejects senior roles where minimum required experience is >= 3 years (e.g. 3-5, 4-8, 5-10 yrs)
+    or where the band is too senior (e.g. 2-6, 0-8).
     """
     if not exp_str:
         return True
@@ -56,10 +57,15 @@ def is_target_experience(exp_str: str) -> bool:
     min_exp = numbers[0]
     max_exp = numbers[1] if len(numbers) > 1 else min_exp
 
-    # Must start at 0, 1, or 2 years, and upper limit must not exceed 3 years
+    # Candidate has 13+ months (1+ yr) experience.
+    # Reject if minimum required experience is 3 or more years:
     if min_exp > 2:
         return False
-    if max_exp > 3:
+    # Reject senior brackets (e.g. 2-6, 2-8, 3-6)
+    if min_exp >= 2 and max_exp > 4:
+        return False
+    # Reject wide executive bands (e.g. 0-8, 0-10)
+    if max_exp > 5:
         return False
     return True
 
@@ -82,7 +88,7 @@ class NaukriAutomator:
 
         try:
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
             try:
@@ -263,7 +269,7 @@ class NaukriAutomator:
 
         try:
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
 
@@ -271,22 +277,24 @@ class NaukriAutomator:
                 if len(applied_list) >= daily_target:
                     break
 
-                search_url = f"https://www.naukri.com/{quote_plus(role.lower().replace(' ', '-'))}-jobs?k={quote_plus(role)}"
-                logger.info(f"Navigating to Naukri search for '{role}'...")
-                
-                try:
-                    page.goto(search_url, wait_until="domcontentloaded")
-                    human_delay(3.5, 5.0)
-                except Exception as e:
-                    logger.warning(f"Error loading Naukri URL: {e}")
-                    continue
-
-                if "access denied" in page.title().lower():
-                    logger.error(f"Naukri bot protection blocked access (Title: '{page.title()}').")
-                    continue
-
-                for page_num in range(1, 4):  # Check up to 3 pages per role
+                slug = quote_plus(role.lower().replace(' ', '-'))
+                for page_num in range(1, 6):  # Check up to 5 pages per role with direct URL pagination
                     if len(applied_list) >= daily_target:
+                        break
+
+                    page_suffix = f"-{page_num}" if page_num > 1 else ""
+                    search_url = f"https://www.naukri.com/{slug}-jobs{page_suffix}?k={quote_plus(role)}&experience=0"
+                    logger.info(f"Navigating to Naukri search for '{role}' (Page {page_num}): {search_url}...")
+                    
+                    try:
+                        page.goto(search_url, wait_until="domcontentloaded")
+                        human_delay(3.0, 4.5)
+                    except Exception as e:
+                        logger.warning(f"Error loading Naukri search URL: {e}")
+                        continue
+
+                    if "access denied" in page.title().lower():
+                        logger.error(f"Naukri bot protection blocked access (Title: '{page.title()}').")
                         break
 
                     # Wait for job cards or listings to render in DOM
@@ -347,11 +355,23 @@ class NaukriAutomator:
                         # Open Job Listing
                         try:
                             page.goto(job_url, wait_until="domcontentloaded")
-                            human_delay(2.0, 3.5)
+                            
+                            # Wait for Next.js hydration / splash screen to resolve
+                            try:
+                                page.wait_for_selector("button#apply-button, button:has-text('Apply'), a:has-text('Apply on company site'), button:has-text('Applied')", timeout=8000)
+                            except Exception:
+                                pass
+
+                            # Check for Already Applied indicator
+                            already_applied = page.locator("button:has-text('Applied'), span:has-text('Already Applied'), div:has-text('Already Applied')").first
+                            if already_applied.count() > 0 and already_applied.is_visible():
+                                logger.info(f"Already applied previously to '{title}' at '{company}'.")
+                                continue
 
                             # Check for Apply Button
                             apply_btn = page.locator("button#apply-button, button:has-text('Apply'), a:has-text('Apply on company site')").first
                             if apply_btn.count() == 0 or not apply_btn.is_visible():
+                                logger.info(f"No active apply button found for '{title}' at '{company}' (URL: {job_url}).")
                                 continue
 
                             btn_text = apply_btn.inner_text().strip().lower()
@@ -412,14 +432,6 @@ class NaukriAutomator:
                         except Exception as e:
                             logger.debug(f"Error applying to {title}: {e}")
                             continue
-
-                    # Try to click next page on Naukri
-                    next_btn = page.locator("a:has-text('Next'), a.fright.fs14.btn-secondary").first
-                    if next_btn.count() > 0 and next_btn.is_visible():
-                        next_btn.click()
-                        human_delay(3.0, 4.5)
-                    else:
-                        break
 
             return {
                 "applied_count": len(applied_list),

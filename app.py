@@ -2966,9 +2966,34 @@ def autonomous_10h_scheduler():
     """
     Runs inside app.py as a lightweight background daemon thread.
     Enforces the 10-hour daily recruiter shift (09:00 AM - 07:00 PM IST).
-    Guarantees zero process bloat and zero memory leaks.
+    Features persistent catch-up milestones in data/daily_milestones.json.
     """
     logger.info("Starting Integrated Autonomous 10-Hour Shift Scheduler (09:00 - 19:00 IST)...")
+    milestone_file = os.path.join(DATA_DIR, "daily_milestones.json")
+
+    def load_milestones():
+        if os.path.exists(milestone_file):
+            try:
+                with open(milestone_file, "r", encoding="utf-8") as f:
+                    return set(json.load(f))
+            except Exception:
+                return set()
+        return set()
+
+    def record_milestone(m_name):
+        completed = load_milestones()
+        completed.add(m_name)
+        try:
+            with open(milestone_file, "w", encoding="utf-8") as f:
+                json.dump(list(completed)[-100:], f, indent=2)
+        except Exception:
+            pass
+
+    last_periodic_runs = {
+        "linkedin_feed": 0,
+        "scan_gmail": 0,
+        "scan_replies": 0
+    }
 
     def scheduled_job(task_name):
         now_ist = datetime.now(IST)
@@ -2979,39 +3004,65 @@ def autonomous_10h_scheduler():
             add_log(f"⏸️ [SCHEDULER] '{task_name}' deferred: Task '{CURRENT_TASK['name']}' is currently running.")
             return
         add_log(f"⏰ [10h SHIFT SCHEDULER] Triggering '{task_name}' at {now_ist.strftime('%H:%M:%S')} IST")
+        last_periodic_runs[task_name] = time.time()
         t = threading.Thread(target=execute_task, args=(task_name,), daemon=True)
         t.start()
 
-    # Recurring scans during active 10h window:
-    schedule.every(45).minutes.do(lambda: scheduled_job("linkedin_feed"))
-    schedule.every(30).minutes.do(lambda: scheduled_job("scan_gmail"))
-    schedule.every(40).minutes.do(lambda: scheduled_job("scan_replies"))
-
-    last_milestone = None
     while True:
         try:
             now_ist = datetime.now(IST)
-            time_str = now_ist.strftime("%H:%M")
+            today_str = str(now_ist.date())
+            current_hour = now_ist.hour
+            current_min = now_ist.minute
+            now_ts = time.time()
 
-            if 9 <= now_ist.hour < 19:
-                if time_str == "09:00" and last_milestone != f"{now_ist.date()}_naukri_boost":
-                    last_milestone = f"{now_ist.date()}_naukri_boost"
+            if 9 <= current_hour < 19:
+                completed = load_milestones()
+
+                # Milestone 1: 09:00 AM Daily Naukri Recency Boost
+                boost_key = f"{today_str}_naukri_boost"
+                if boost_key not in completed and current_hour >= 9:
+                    record_milestone(boost_key)
                     scheduled_job("naukri_boost")
-                elif time_str == "09:30" and last_milestone != f"{now_ist.date()}_naukri_apply_am":
-                    last_milestone = f"{now_ist.date()}_naukri_apply_am"
+
+                # Milestone 2: 09:30 AM Daily Naukri Mass Apply Morning Run
+                apply_am_key = f"{today_str}_naukri_apply_am"
+                if apply_am_key not in completed and (current_hour > 9 or (current_hour == 9 and current_min >= 30)):
+                    record_milestone(apply_am_key)
                     scheduled_job("naukri_apply")
-                elif time_str == "15:30" and last_milestone != f"{now_ist.date()}_naukri_apply_pm":
-                    last_milestone = f"{now_ist.date()}_naukri_apply_pm"
+
+                # Milestone 3: 03:30 PM Daily Naukri Mass Apply Afternoon Run
+                apply_pm_key = f"{today_str}_naukri_apply_pm"
+                if apply_pm_key not in completed and (current_hour > 15 or (current_hour == 15 and current_min >= 30)):
+                    record_milestone(apply_pm_key)
                     scheduled_job("naukri_apply")
-                elif time_str == "18:45" and last_milestone != f"{now_ist.date()}_gmail_pm":
-                    last_milestone = f"{now_ist.date()}_gmail_pm"
+
+                # Milestone 4: 06:45 PM Evening Gmail Sweep
+                gmail_pm_key = f"{today_str}_gmail_pm"
+                if gmail_pm_key not in completed and (current_hour > 18 or (current_hour == 18 and current_min >= 45)):
+                    record_milestone(gmail_pm_key)
                     scheduled_job("scan_gmail")
 
-            if time_str == "19:00" and last_milestone != f"{now_ist.date()}_shift_end":
-                last_milestone = f"{now_ist.date()}_shift_end"
-                add_log("🌙 [10h SHIFT COMPLETE] 07:00 PM IST reached. Standby until 09:00 AM tomorrow.")
+                # Periodic Tasks (Catch-up on server wake or recurring interval):
+                # Feed Harvest: Every 45 minutes
+                if (now_ts - last_periodic_runs["linkedin_feed"]) > (45 * 60):
+                    scheduled_job("linkedin_feed")
 
-            schedule.run_pending()
+                # Gmail Intel: Every 30 minutes
+                elif (now_ts - last_periodic_runs["scan_gmail"]) > (30 * 60):
+                    scheduled_job("scan_gmail")
+
+                # LinkedIn Replies / Resumes: Every 40 minutes
+                elif (now_ts - last_periodic_runs["scan_replies"]) > (40 * 60):
+                    scheduled_job("scan_replies")
+
+            elif current_hour >= 19:
+                shift_end_key = f"{today_str}_shift_end"
+                completed = load_milestones()
+                if shift_end_key not in completed:
+                    record_milestone(shift_end_key)
+                    add_log("🌙 [10h SHIFT COMPLETE] 07:00 PM IST reached. Standby until 09:00 AM tomorrow.")
+
         except Exception as e:
             logger.error(f"Error in autonomous scheduler: {e}")
 

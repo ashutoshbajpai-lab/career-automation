@@ -78,8 +78,10 @@ class FeedHarvester:
 
         # Check if login or checkpoint
         if "login" in current_url or "checkpoint" in current_url:
-            self._log(f"⚠️ LinkedIn requires authentication / checkpoint: {current_url}")
-            return []
+            self._log(f"⚠️ LinkedIn requires session update: redirected to {current_url}")
+            self._log("🔑 TIP: Paste your fresh 'li_at' cookie in the dashboard header (click key icon) for direct feed outreach.")
+            self._log("🌐 Activating Instant Public Jobs Engine (Harvesting 0-2 Yrs Analyst & PM Roles across India)...")
+            return self._harvest_public_guest_jobs()
 
         target_posts = int(self.config.get("limits", {}).get("max_feed_posts_per_run", 100))
         if target_posts < 100:
@@ -363,18 +365,78 @@ class FeedHarvester:
         self._log(f"Feed Harvester finished: Collected {len(new_leads)} new leads.")
         return new_leads
 
+    def _harvest_public_guest_jobs(self) -> list:
+        """
+        Public Guest Fallback: Fetches live verified 0-2 yrs roles from LinkedIn Guest API
+        without requiring user session cookies.
+        """
+        queries = ["analyst", "product intern", "business analyst", "associate product manager"]
+        fallback_leads = []
+        seen_urns = set(self.state.get("seen_post_urns", []))
+
+        for q in queries:
+            url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={urllib.parse.quote(q)}&location=India&f_E=1%2C2"
+            try:
+                req = urllib.request.Request(
+                    url, 
+                    headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"}
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    html = resp.read().decode("utf-8", errors="ignore")
+                
+                titles = re.findall(r"<h3[^>]*class=\"base-search-card__title\"[^>]*>(.*?)</h3>", html, re.DOTALL)
+                companies = re.findall(r"<h4[^>]*class=\"base-search-card__subtitle\"[^>]*>(.*?)</h4>", html, re.DOTALL)
+                links = re.findall(r"<a[^>]*class=\"base-card__full-link[^\"]*\"[^>]*href=\"([^\"]+)\"", html)
+                locations = re.findall(r"<span[^>]*class=\"job-search-card__location\"[^>]*>(.*?)</span>", html, re.DOTALL)
+
+                for t, c, l, loc in zip(titles, companies, links, locations):
+                    title = re.sub(r"<[^>]+>", "", t).strip()
+                    comp = re.sub(r"<[^>]+>", "", c).strip()
+                    link = l.split("?")[0].strip()
+                    location = re.sub(r"<[^>]+>", "", loc).strip()
+                    hash_id = str(abs(hash(link)))[:12]
+
+                    if hash_id in seen_urns:
+                        continue
+                    seen_urns.add(hash_id)
+
+                    lead = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "author": comp,
+                        "emails": "",
+                        "form_links": link,
+                        "hyperlinks": link,
+                        "post_url": link,
+                        "tags": ["Recruiting (0-2 Yrs)", "Verified Public Role"],
+                        "preview": f"Role: {title} at {comp} ({location}). Target: 0-2 Years Experience. Direct Application.",
+                        "id": hash_id
+                    }
+                    fallback_leads.append(lead)
+                    self._log(f"🎯 [PUBLIC ROLE FOUND] {title} at {comp} ({location})")
+            except Exception as e:
+                logger.warning(f"Error querying guest jobs for query '{q}': {e}")
+
+        self.state["seen_post_urns"] = list(seen_urns)[-500:]
+        if fallback_leads:
+            self._save_leads(fallback_leads)
+            self._log(f"✅ Harvested {len(fallback_leads)} verified active junior/entry roles via public jobs engine.")
+        return fallback_leads
+
     def _save_leads(self, leads: list):
         if not leads:
             return
 
         file_exists = os.path.exists(self.leads_csv)
         with open(self.leads_csv, "a", newline="", encoding="utf-8") as f:
-            fieldnames = ["timestamp", "author", "emails", "form_links", "hyperlinks", "post_url", "preview", "id"]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            fieldnames = ["timestamp", "author", "emails", "form_links", "hyperlinks", "post_url", "preview", "tags", "id"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             if not file_exists:
                 writer.writeheader()
             for l in leads:
-                writer.writerow(l)
+                row = dict(l)
+                if isinstance(row.get("tags"), list):
+                    row["tags"] = ", ".join(row["tags"])
+                writer.writerow(row)
 
         existing_json = []
         if os.path.exists(self.leads_json):

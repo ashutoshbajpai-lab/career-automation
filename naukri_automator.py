@@ -266,8 +266,10 @@ class NaukriAutomator:
         applied_list = []
         manual_list = []
         seen_job_urls = self._get_seen_urls()
+        logger.info(f"Loaded {len(seen_job_urls)} already-processed job URLs to skip duplicates.")
 
         try:
+            page.set_default_timeout(15000)
             try:
                 page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
@@ -276,6 +278,8 @@ class NaukriAutomator:
             for role in target_roles:
                 if len(applied_list) >= daily_target:
                     break
+                import gc
+                gc.collect()
 
                 slug = quote_plus(role.lower().replace(' ', '-'))
                 for page_num in range(1, 6):  # Check up to 5 pages per role with direct URL pagination
@@ -614,14 +618,18 @@ class NaukriAutomator:
 
     def _get_seen_urls(self) -> set:
         seen = set()
-        if os.path.exists(NAUKRI_APPLIED_CSV):
-            try:
-                with open(NAUKRI_APPLIED_CSV, "r", encoding="utf-8") as f:
-                    reader = csv.DictReader(f)
-                    for r in reader:
-                        seen.add(r.get("job_url", ""))
-            except Exception:
-                pass
+        for path in [NAUKRI_APPLIED_CSV, MANUAL_CSV]:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        for r in reader:
+                            if r.get("job_url"):
+                                seen.add(r.get("job_url"))
+                            if r.get("direct_application_url"):
+                                seen.add(r.get("direct_application_url"))
+                except Exception:
+                    pass
         return seen
 
     def get_boost_status(self) -> dict:

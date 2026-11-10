@@ -67,7 +67,11 @@ try:
 except Exception as e:
     logger.warning(f"Note on restoring session cookies: {e}")
 
-CURRENT_TASK = {"running": False, "name": "Idle", "started_at": None}
+from collections import deque
+
+CURRENT_TASK = {"running": False, "name": "Idle", "started_at": None, "queued": []}
+TASK_QUEUE = deque()
+TASK_LOCK = threading.Lock()
 LIVE_LOGS = []
 
 
@@ -1620,6 +1624,21 @@ MERAKI_UI_HTML = """
 
       document.getElementById('currentBreadcrumb').innerText = tabId;
       document.getElementById('currentPageHeading').innerText = headingMap[tabId] || tabId;
+      refreshTabView(tabId);
+    }
+
+    function refreshTabView(tabId) {
+      if (tabId === 'dashboard') { loadManualTable(); loadGmailIntel(); }
+      else if (tabId === 'gmail') { loadGmailIntel(); }
+      else if (tabId === 'feed' || tabId === 'forms') { loadFeedPosts(); }
+      else if (tabId === 'easy-apply') { loadEasyApplyJobs(); }
+      else if (tabId === 'recruiters') { loadRecruiterLeads(); }
+      else if (tabId === 'alumni') { loadOutreachHistory(); loadTemplates(); }
+      else if (tabId === 'mumbai') { loadMumbaiWorkspace(); }
+      else if (tabId === 'naukri') { loadNaukriApplied(); }
+      else if (tabId === 'manual') { loadManualTable(); }
+      else if (tabId === 'resume') { loadResumeStatus(); loadDispatches(); }
+      else if (tabId === 'terminal') { pollLogs(); }
     }
 
     async function pollDashboardData() {
@@ -3132,19 +3151,16 @@ MERAKI_UI_HTML = """
       }).join('');
     }
 
-    // Polling Intervals
-    setInterval(pollDashboardData, 3000);
-    setInterval(pollLogs, 1500);
-    setInterval(loadManualTable, 5000);
-    setInterval(loadGmailIntel, 6000);
-    setInterval(loadFeedPosts, 6000);
-    setInterval(loadEasyApplyJobs, 6000);
-    setInterval(loadRecruiterLeads, 6000);
-    setInterval(loadNaukriApplied, 6000);
-    setInterval(loadOutreachHistory, 5000);
-    setInterval(loadDispatches, 8000);
-    setInterval(loadMumbaiWorkspace, 6000);
+    // Smart Load-Managed Polling: Stats + Logs when active; only refresh currently visible tab
+    setInterval(pollDashboardData, 4000);
+    setInterval(() => {
+      if (activeTab === 'terminal') pollLogs();
+    }, 2000);
+    setInterval(() => {
+      refreshTabView(activeTab);
+    }, 6000);
 
+    // Initial Boot Fetch
     pollDashboardData();
     pollLogs();
     loadManualTable();
@@ -3749,12 +3765,14 @@ def save_json_file(filepath: str, data: dict):
 
 @app.route("/api/reset_task", methods=["POST"])
 def reset_task():
-    global CURRENT_TASK
-    CURRENT_TASK["running"] = False
-    CURRENT_TASK["name"] = "Idle"
-    CURRENT_TASK["started_at"] = None
-    add_log("SYSTEM: Task execution lock forcibly reset to Idle.")
-    return jsonify({"status": "success", "message": "Task reset to Idle."})
+    with TASK_LOCK:
+        TASK_QUEUE.clear()
+        CURRENT_TASK["running"] = False
+        CURRENT_TASK["name"] = "Idle"
+        CURRENT_TASK["started_at"] = None
+        CURRENT_TASK["queued"] = []
+    add_log("SYSTEM: Task execution lock & queue forcibly reset to Idle.")
+    return jsonify({"status": "success", "message": "Task lock and queue reset to Idle."})
 
 
 @app.route("/api/update_cookies", methods=["POST"])
@@ -4016,20 +4034,48 @@ def execute_task(task_type):
     except Exception as e:
         add_log(f"ERROR during {task_type}: {e}")
     finally:
-        CURRENT_TASK["running"] = False
-        CURRENT_TASK["name"] = "Idle"
         import gc
         gc.collect()
+        next_task = None
+        with TASK_LOCK:
+            if TASK_QUEUE:
+                next_task = TASK_QUEUE.popleft()
+                CURRENT_TASK["queued"] = list(TASK_QUEUE)
+                CURRENT_TASK["running"] = True
+                CURRENT_TASK["name"] = next_task
+                CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+            else:
+                CURRENT_TASK["running"] = False
+                CURRENT_TASK["name"] = "Idle"
+                CURRENT_TASK["started_at"] = None
+                CURRENT_TASK["queued"] = []
+        if next_task:
+            add_log(f"⏭️ [TASK QUEUE] Launching next queued operation: '{next_task}'")
+            threading.Thread(target=execute_task, args=(next_task,), daemon=True).start()
+
+
+def enqueue_or_run_task(task_type: str) -> tuple:
+    """Safely runs task immediately if idle, or queues it sequentially to prevent Chromium/memory overload."""
+    with TASK_LOCK:
+        if not CURRENT_TASK["running"]:
+            CURRENT_TASK["running"] = True
+            CURRENT_TASK["name"] = task_type
+            CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+            CURRENT_TASK["queued"] = list(TASK_QUEUE)
+            threading.Thread(target=execute_task, args=(task_type,), daemon=True).start()
+            return True, f"Task '{task_type}' launched in background."
+        if task_type not in TASK_QUEUE and CURRENT_TASK["name"] != task_type:
+            TASK_QUEUE.append(task_type)
+            CURRENT_TASK["queued"] = list(TASK_QUEUE)
+            add_log(f"📥 [TASK QUEUE] Queued '{task_type}' behind '{CURRENT_TASK['name']}' (Queue size: {len(TASK_QUEUE)}).")
+            return True, f"Task '{task_type}' safely queued behind '{CURRENT_TASK['name']}'."
+        return False, f"Task '{task_type}' is already running or queued."
 
 
 @app.route("/api/run/<task_type>", methods=["POST"])
 def run_task(task_type):
-    if CURRENT_TASK["running"]:
-        return jsonify({"error": f"Task '{CURRENT_TASK['name']}' is running."}), 400
-
-    t = threading.Thread(target=execute_task, args=(task_type,), daemon=True)
-    t.start()
-    return jsonify({"message": f"Task '{task_type}' launched in background."})
+    ok, msg = enqueue_or_run_task(task_type)
+    return jsonify({"message": msg, "queued": CURRENT_TASK.get("queued", [])})
 
 
 def autonomous_10h_scheduler():

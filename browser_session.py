@@ -197,13 +197,67 @@ class BrowserManager:
 
         return self.context, page
 
+    @staticmethod
+    def probe_li_at_valid(li_at_val: str) -> bool:
+        """Lightweight live check whether a LinkedIn li_at cookie still accesses /feed/ without login redirect."""
+        if not li_at_val:
+            return False
+        try:
+            import requests
+            session = requests.Session()
+            session.max_redirects = 5
+            res = session.get(
+                "https://www.linkedin.com/feed/",
+                cookies={"li_at": li_at_val},
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                    )
+                },
+                allow_redirects=True,
+                timeout=8,
+            )
+            final_url = (res.url or "").lower()
+            if any(x in final_url for x in ("login", "uas/login", "authwall", "checkpoint")):
+                return False
+            title_snippet = (res.text[:2000] if res.text else "").lower()
+            if "linkedin login" in title_snippet or "sign in | linkedin" in title_snippet:
+                return False
+            return res.status_code == 200
+        except Exception as e:
+            logger.debug(f"probe_li_at_valid fallback error: {e}")
+            return False
+
+    @staticmethod
+    def mark_session_expired(reason: str = "redirected_to_login"):
+        """Marks session_cookies.json as expired so dashboard status flips to 'LinkedIn: Update Key'."""
+        session_file = os.path.join(BASE_DIR, "data", "session_cookies.json")
+        if not os.path.exists(session_file):
+            return
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                sdata = json.load(f)
+            sdata["status"] = "expired"
+            sdata["expired_reason"] = reason
+            sdata["expired_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(sdata, f, indent=2)
+        except Exception as e:
+            logger.debug(f"Could not mark session_cookies.json expired: {e}")
+
     def ensure_logged_in(self, page, timeout_sec: int = 300) -> bool:
         """
         Deterministic check for LinkedIn authentication using the official li_at cookie.
-        If missing, opens login page and waits up to timeout_sec for the user to sign in.
+        Verifies live validity when non-CDP cookies are used so stale cookies are caught immediately.
         """
         cookies = self.context.cookies(["https://www.linkedin.com"])
-        if any(c["name"] == "li_at" for c in cookies):
+        li_at_cookie = next((c for c in cookies if c["name"] == "li_at" and c.get("value")), None)
+        if li_at_cookie:
+            if not self.is_cdp and not self.probe_li_at_valid(li_at_cookie["value"]):
+                logger.warning("Saved li_at cookie failed live /feed/ check (expired/revoked).")
+                self.mark_session_expired("live_feed_check_failed")
+                return False
             logger.info("Session verified: User is logged in to LinkedIn (li_at cookie active).")
             return True
 

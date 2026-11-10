@@ -197,7 +197,10 @@ def get_stats():
         try:
             with open(session_file, "r", encoding="utf-8") as f:
                 sdata = json.load(f)
-            has_li_at = any(c.get("name") == "li_at" and c.get("value") for c in sdata.get("cookies", []))
+            has_li_at = (
+                sdata.get("status") != "expired"
+                and any(c.get("name") == "li_at" and c.get("value") for c in sdata.get("cookies", []))
+            )
         except Exception:
             pass
 
@@ -2771,6 +2774,30 @@ MERAKI_UI_HTML = """
       document.getElementById('sessionModal').classList.add('hidden');
     }
 
+    async function launchLinkedInLogin() {
+      const btn = document.getElementById('btnLaunchLoginBrowser');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Opening Chrome...';
+      }
+      try {
+        const res = await fetch('/api/launch_linkedin_login', { method: 'POST' });
+        const d = await res.json();
+        alert(d.message || d.error || 'Done');
+        if (d.success) {
+          closeSessionModal();
+          switchTab('terminal');
+        }
+      } catch (err) {
+        alert('Error: ' + err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-brands fa-chrome"></i> Open Chrome Sign-In Window';
+        }
+      }
+    }
+
     async function submitSessionCookie() {
       const liAt = document.getElementById('inputLiAt').value.trim();
       if (!liAt) {
@@ -2779,7 +2806,7 @@ MERAKI_UI_HTML = """
       }
       const btn = document.getElementById('btnSaveCookie');
       btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving & Syncing to Render...';
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying & Syncing...';
       try {
         const res = await fetch('/api/update_cookies', {
           method: 'POST',
@@ -2788,7 +2815,7 @@ MERAKI_UI_HTML = """
         });
         const d = await res.json();
         if (d.success) {
-          alert('SUCCESS: li_at cookie saved and synced to Render! You can now run Feed (100+) Deep Harvest.');
+          alert('SUCCESS: Live LinkedIn cookie verified, saved & synced to Render! You can now run "Find 30+ Contacts & Store List".');
           closeSessionModal();
           pollDashboardData();
         } else {
@@ -2798,7 +2825,7 @@ MERAKI_UI_HTML = """
         alert('Network error: ' + err);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Save & Sync to Render';
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Verify, Save & Sync to Render';
       }
     }
 
@@ -3251,9 +3278,20 @@ MERAKI_UI_HTML = """
       </div>
 
       <div class="p-6 space-y-4">
+        <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 flex items-center justify-between gap-3">
+          <div>
+            <div class="font-bold">Option 1 (Fastest on Mac): Sign in with Chrome</div>
+            <p class="text-[11px] text-emerald-700">Opens a visible Chrome login window and auto-saves your verified LinkedIn session once you sign in.</p>
+          </div>
+          <button onclick="launchLinkedInLogin()" id="btnLaunchLoginBrowser" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm whitespace-nowrap flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-brands fa-chrome"></i>
+            <span>Open Chrome Sign-In Window</span>
+          </button>
+        </div>
+
         <div class="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-800 space-y-1">
           <div class="font-bold flex items-center gap-1.5">
-            <i class="fa-solid fa-circle-info"></i> How to get your li_at cookie in 15 seconds:
+            <i class="fa-solid fa-circle-info"></i> Option 2: Paste your li_at cookie manually:
           </div>
           <ol class="list-decimal list-inside space-y-0.5 text-blue-700 text-[11px] pl-1">
             <li>Open <a href="https://www.linkedin.com" target="_blank" class="underline font-semibold">LinkedIn.com</a> in your browser.</li>
@@ -3273,7 +3311,7 @@ MERAKI_UI_HTML = """
           </button>
           <button onclick="submitSessionCookie()" id="btnSaveCookie" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition cursor-pointer">
             <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span>Save &amp; Sync to Render</span>
+            <span>Verify, Save &amp; Sync to Render</span>
           </button>
         </div>
       </div>
@@ -3884,12 +3922,42 @@ def reset_task():
     return jsonify({"status": "success", "message": "Task lock and queue reset to Idle."})
 
 
+@app.route("/api/launch_linkedin_login", methods=["POST"])
+def launch_linkedin_login_route():
+    if os.environ.get("RENDER"):
+        return jsonify({
+            "success": False,
+            "error": "Interactive Chrome sign-in only runs on your local Mac dashboard (http://127.0.0.1:5055). On Render, paste your li_at cookie instead."
+        }), 400
+    import subprocess
+    import sys
+    script_path = os.path.join(BASE_DIR, "login_once.py")
+    try:
+        subprocess.Popen([sys.executable, script_path], cwd=BASE_DIR)
+        add_log("🌐 Opened visible Chrome window for LinkedIn sign-in (login_once.py). Complete login there to auto-sync session!")
+        return jsonify({
+            "success": True,
+            "message": "Chrome LinkedIn Login window opened on your Mac! Please sign in there — once you reach LinkedIn Feed, your session will auto-save and sync to Render."
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not launch Chrome login helper: {e}"}), 500
+
+
 @app.route("/api/update_cookies", methods=["POST"])
 def update_cookies_route():
     data = request.json or {}
-    li_at_val = data.get("li_at", "").strip()
+    li_at_val = (data.get("li_at") or "").strip().strip('"').strip("'").rstrip(";")
+    if li_at_val.lower().startswith("li_at="):
+        li_at_val = li_at_val.split("=", 1)[1].strip().strip('"').strip("'").rstrip(";")
     if not li_at_val:
         return jsonify({"success": False, "error": "No li_at cookie value provided."}), 400
+
+    # Verify live against LinkedIn before saving so expired/typo strings aren't accepted
+    if not BrowserManager.probe_li_at_valid(li_at_val):
+        return jsonify({
+            "success": False,
+            "error": "That li_at cookie is expired or invalid (LinkedIn redirected /feed to login). Please copy a fresh li_at cookie from an active LinkedIn session or use 'Open Chrome Sign-In Window'."
+        }), 400
 
     session_file = os.path.join(DATA_DIR, "session_cookies.json")
     cookies = []
@@ -3924,6 +3992,7 @@ def update_cookies_route():
         })
 
     payload = {
+        "status": "active",
         "exported_at": datetime.now(IST).strftime("%a %b %d %H:%M:%S IST %Y"),
         "cookies": cookies
     }

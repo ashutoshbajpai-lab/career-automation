@@ -47,6 +47,12 @@ def main():
     mgr = BrowserManager()
     context, page = mgr.get_context_and_page(force_headless=False)
 
+    # Clear any stale/expired LinkedIn cookies so the wait loop doesn't exit prematurely
+    try:
+        context.clear_cookies()
+    except Exception:
+        pass
+
     page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
     logger.info("Please sign in (via Google SSO or Email/Password) in the opened Chrome window.")
     logger.info("Waiting for your LinkedIn login to complete...")
@@ -54,10 +60,16 @@ def main():
     while True:
         time.sleep(2)
         try:
+            cur_url = (page.url or "").lower()
             cookies = context.cookies(["https://www.linkedin.com"])
-            if any(c["name"] == "li_at" for c in cookies):
+            li_at = next((c["value"] for c in cookies if c["name"] == "li_at" and c.get("value")), None)
+            on_logged_in_route = (
+                "linkedin.com" in cur_url
+                and not any(x in cur_url for x in ("/login", "/uas/login", "/checkpoint", "/authwall", "signup"))
+            )
+            if li_at and on_logged_in_route and mgr.probe_li_at_valid(li_at):
                 logger.info("=" * 65)
-                logger.info("SUCCESS! LinkedIn authentication cookie (li_at) detected.")
+                logger.info("SUCCESS! Live LinkedIn authentication cookie (li_at) verified.")
                 break
         except Exception:
             pass
@@ -76,6 +88,7 @@ def main():
 
     os.makedirs(DATA_DIR, exist_ok=True)
     payload = {
+        "status": "active",
         "exported_at": os.popen("date").read().strip(),
         "cookies": all_cookies
     }

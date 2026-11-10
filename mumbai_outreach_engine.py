@@ -801,6 +801,7 @@ class MumbaiOutreachEngine:
                         human_delay(2.5, 3.5)
                         if "uas/login" in page.url or "checkpoint" in page.url:
                             log("⚠️ LinkedIn redirected to Login/Checkpoint! Your saved li_at cookie expired. Click 'LinkedIn: Update Key' in the header to update li_at.")
+                            self.browser_mgr.mark_session_expired("pec_search_redirect")
                             auth_failed = True
                             break
                         raw_people = self.referral_engine._extract_search_results(page, comp_name, "PEC Alumni")
@@ -825,6 +826,7 @@ class MumbaiOutreachEngine:
                             human_delay(2.2, 3.5)
                             if "uas/login" in page.url or "checkpoint" in page.url:
                                 log("⚠️ LinkedIn redirected to Login! Click 'LinkedIn: Update Key' to refresh your li_at cookie.")
+                                self.browser_mgr.mark_session_expired("keyword_search_redirect")
                                 auth_failed = True
                                 break
                             raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
@@ -839,16 +841,23 @@ class MumbaiOutreachEngine:
                 # Pass C: Fallback company /people/ keyword pages if still below 30+
                 if not auth_failed and company_found < min_contacts_per_company:
                     for kw in kw_list[:3]:
-                        if company_found >= limit_per_company:
+                        if company_found >= limit_per_company or auth_failed:
                             break
                         try:
                             curl = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus(kw)}"
                             page.goto(curl, wait_until="domcontentloaded")
                             human_delay(2.5, 3.5)
+                            if "uas/login" in page.url or "checkpoint" in page.url:
+                                self.browser_mgr.mark_session_expired("company_people_redirect")
+                                auth_failed = True
+                                break
                             raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=False)
                             _ingest_people(raw_people, default_kw=kw, force_pec=False)
                         except Exception:
                             pass
+
+                if auth_failed:
+                    break
 
                 comp["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 log(f"Discovered {company_found} segregated contacts for '{comp_name}'.")
@@ -971,6 +980,7 @@ class MumbaiOutreachEngine:
 
                     if "uas/login" in page.url or "checkpoint" in page.url:
                         log("⚠️ LinkedIn redirected to Login! Update li_at cookie first.")
+                        self.browser_mgr.mark_session_expired("connect_cycle_redirect")
                         break
 
                     pending_btn = page.locator("main button:has-text('Pending'), main span:has-text('Pending')").first
@@ -1095,6 +1105,7 @@ class MumbaiOutreachEngine:
                     human_delay(2.2, 3.5)
                     if "uas/login" in page.url or "checkpoint" in page.url:
                         log("⚠️ LinkedIn redirected to Login! Update li_at cookie.")
+                        self.browser_mgr.mark_session_expired("send_messages_redirect")
                         break
 
                     msg_text = self._render_message_for_contact(contact, companies_by_id)
@@ -1224,6 +1235,10 @@ class MumbaiOutreachEngine:
                 try:
                     page.goto(purl, wait_until="domcontentloaded")
                     human_delay(2.0, 3.0)
+                    if "uas/login" in page.url or "checkpoint" in page.url:
+                        log("⚠️ LinkedIn redirected to Login! Update li_at cookie.")
+                        self.browser_mgr.mark_session_expired("followup_redirect")
+                        break
                     c["last_checked_at"] = now_str
 
                     is_1st_badge = page.locator("main span.dist-value:has-text('1st'), main span:has-text('• 1st')").first.count() > 0

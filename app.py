@@ -40,6 +40,7 @@ from recruitment_dispatcher import (
 from company_network_expander import CompanyNetworkExpander
 from feed_harvester import FeedHarvester
 from job_scanner import JobScanner
+from mumbai_outreach_engine import MumbaiOutreachEngine, MUMBAI_CONTACTS_JSON, MUMBAI_COMPANIES_JSON
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("MerakiApp")
@@ -196,6 +197,19 @@ def get_stats():
         except Exception:
             pass
 
+    mumbai_companies_count = 0
+    mumbai_incomplete_count = 0
+    try:
+        if os.path.exists(MUMBAI_COMPANIES_JSON):
+            with open(MUMBAI_COMPANIES_JSON, "r", encoding="utf-8") as f:
+                mumbai_companies_count = len(json.load(f))
+        if os.path.exists(MUMBAI_CONTACTS_JSON):
+            with open(MUMBAI_CONTACTS_JSON, "r", encoding="utf-8") as f:
+                mc = json.load(f)
+                mumbai_incomplete_count = sum(1 for c in mc if c.get("workflow_stage") == "incomplete_pending_accept")
+    except Exception:
+        pass
+
     return {
         "naukri_today": naukri_count,
         "linkedin_today": linkedin_count,
@@ -207,6 +221,8 @@ def get_stats():
         "easy_apply_count": len(easy_apply_jobs),
         "recruiter_leads_count": len(recruiter_leads),
         "outreach_count": len(outreach_records),
+        "mumbai_companies_count": mumbai_companies_count,
+        "mumbai_incomplete_count": mumbai_incomplete_count,
         "naukri_boost": boost_status,
         "current_task": CURRENT_TASK,
         "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
@@ -305,6 +321,14 @@ MERAKI_UI_HTML = """
                     class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
               <i class="fa-solid fa-graduation-cap w-4 text-amber-500"></i>
               <span>PEC Referrals</span>
+            </button>
+            <button onclick="switchTab('mumbai')" id="nav-mumbai"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-city w-4 text-indigo-600"></i>
+                <span>Mumbai Network</span>
+              </div>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" id="sidebarMumbaiBadge">0</span>
             </button>
             <button onclick="switchTab('naukri')" id="nav-naukri"
                     class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
@@ -1302,6 +1326,235 @@ MERAKI_UI_HTML = """
       </div>
 
       <!-- ========================================== -->
+      <!-- TAB 8B: MUMBAI NETWORK & 2-DAY FOLLOW-UP   -->
+      <!-- ========================================== -->
+      <div id="view-mumbai" class="hidden space-y-6">
+        
+        <!-- Daily Lifecycle Metrics Row -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">Today Connects Sent</p>
+            <h3 class="text-2xl font-bold text-indigo-600 mt-1" id="mumbaiTodayConnects">0</h3>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">Today Messages Sent</p>
+            <h3 class="text-2xl font-bold text-emerald-600 mt-1" id="mumbaiTodayMessages">0</h3>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">PEC Alumni Found</p>
+            <h3 class="text-2xl font-bold text-amber-600 mt-1" id="mumbaiPecCount">0</h3>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">Incomplete (Pending)</p>
+            <div class="flex items-baseline gap-2 mt-1">
+              <h3 class="text-2xl font-bold text-rose-600" id="mumbaiIncompleteCount">0</h3>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700"><span id="mumbaiDue2DayCount">0</span> due 2d+</span>
+            </div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">Completed Outreach</p>
+            <h3 class="text-2xl font-bold text-teal-600 mt-1" id="mumbaiCompletedCount">0</h3>
+          </div>
+        </div>
+
+        <!-- Step 1: Mumbai Companies Discovery & Per-Company Template Manager -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <i class="fa-solid fa-city text-indigo-600"></i>
+                <span>Step 1: Mumbai Companies Directory (Ordered: 250-500 → 500-1000 → 1000+)</span>
+              </h3>
+              <p class="text-xs text-slate-400">Click any <strong>Company Name</strong> (e.g. JPMorgan, Zepto, GrayQuest) to edit its custom <strong>PEC Chandigarh Template</strong> &amp; <strong>Other Template</strong>.</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="generateMumbaiCompanies()" id="btnGenMumbaiCompanies"
+                      class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer transition">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Generate Mumbai Companies (By Size)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Add Custom Company + Size Filter Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1 pb-2 border-b border-slate-100">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button onclick="filterMumbaiSize('all')" id="btnMSizeAll" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">All Sizes (Sorted)</button>
+              <button onclick="filterMumbaiSize('250-500')" id="btnMSize250" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">250-500 (Start Here)</button>
+              <button onclick="filterMumbaiSize('500-1000')" id="btnMSize500" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">500-1000</button>
+              <button onclick="filterMumbaiSize('1000+')" id="btnMSize1000" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">1000+ Employees</button>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="customMumbaiCompanyName" placeholder="Add company (e.g. JP Morgan)" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
+              <select id="customMumbaiCompanySize" class="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700">
+                <option value="250-500">250-500</option>
+                <option value="500-1000">500-1000</option>
+                <option value="1000+" selected>1000+</option>
+              </select>
+              <button onclick="addCustomMumbaiCompany()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold cursor-pointer">
+                + Add Company
+              </button>
+            </div>
+          </div>
+
+          <!-- Companies Table -->
+          <div class="overflow-x-auto max-h-72 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider sticky top-0">
+                <tr>
+                  <th class="p-2.5 w-8"><input type="checkbox" id="selectAllMumbaiCompanies" onchange="toggleAllMumbaiCompanies(this)" class="rounded text-indigo-600 cursor-pointer"></th>
+                  <th class="p-2.5">Company Name (Click for Templates)</th>
+                  <th class="p-2.5">Headcount Tier</th>
+                  <th class="p-2.5">Industry</th>
+                  <th class="p-2.5">PEC / Other Contacts</th>
+                  <th class="p-2.5">Incomplete / Done</th>
+                  <th class="p-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="mumbaiCompaniesTableBody">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">Loading Mumbai companies...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Per-Company Dual Template Editor Panel (Shown when a Company Name is clicked) -->
+        <div id="mumbaiTemplateEditorCard" class="hidden bg-indigo-50/60 p-6 rounded-2xl border border-indigo-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-pen-to-square text-indigo-600"></i>
+                <span>Custom Message Templates for: <span id="tmplEditorCompanyName" class="text-indigo-700 underline">Company</span></span>
+              </h3>
+              <p class="text-[11px] text-slate-500">Available placeholders: <code>{first_name}</code>, <code>{name}</code>, <code>{company}</code>, <code>{keyword}</code></p>
+            </div>
+            <button onclick="closeMumbaiTemplateEditor()" class="text-xs text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-white border border-slate-200 cursor-pointer">
+              Close Editor ✕
+            </button>
+          </div>
+          <input type="hidden" id="tmplEditorCompanyId">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-xl border border-amber-200 space-y-2">
+              <label class="block text-xs font-bold text-amber-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-graduation-cap"></i>
+                <span>1. PEC Chandigarh Alumni Template</span>
+              </label>
+              <textarea id="tmplEditorPec" rows="4" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500"></textarea>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-sky-200 space-y-2">
+              <label class="block text-xs font-bold text-sky-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-user-tie"></i>
+                <span>2. Other Contacts Template (HR, Founder's Office, Product, Analyst)</span>
+              </label>
+              <textarea id="tmplEditorOther" rows="4" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500"></textarea>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button onclick="saveMumbaiCompanyTemplates()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer">
+              <i class="fa-solid fa-floppy-disk mr-1"></i> Save Company Templates
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: Workflow Controls (Extract Keywords -> Maximize Connects -> 2-Day Check) -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                <i class="fa-solid fa-gears text-teal-600"></i>
+                <span>Step 2: Contact Keyword Discovery, Connection Maximization &amp; 2-Day Follow-Up</span>
+              </h3>
+              <p class="text-xs text-slate-400">Extracts LinkedIn contacts by keywords, segregates <strong>PEC Chandigarh</strong> vs <strong>Other</strong>, maximizes clean connection invites (250-500 → 500-1000 → 1000+), and follows up after 2 days.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
+            <div class="lg:col-span-5">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Target Role / Department Keywords (comma-separated)</label>
+              <input type="text" id="mumbaiKeywordsInput" value="Founder's Office, HR, Talent, Product, Analyst"
+                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="lg:col-span-7 flex flex-wrap items-center gap-2">
+              <button onclick="generateMumbaiContacts()" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-teal-600/20 cursor-pointer">
+                <i class="fa-solid fa-magnifying-glass-plus"></i>
+                <span>Find &amp; Segregate Contacts</span>
+              </button>
+              <button onclick="runMumbaiOutreachCycle()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>Maximize Connects &amp; Message Connected</span>
+              </button>
+              <button onclick="runMumbai2DayFollowup()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-amber-600/20 cursor-pointer">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>Run 2-Day Acceptance Check &amp; Send</span>
+              </button>
+              <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 ml-1 cursor-pointer">
+                <input type="checkbox" id="mumbaiCheckAllPending" class="rounded text-amber-600">
+                <span>Check All Pending (&lt;2d too)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Segregated Contacts & Lifecycle Queues -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+          <div class="flex items-center gap-2 flex-wrap border-b border-slate-100 pb-3">
+            <button onclick="switchMumbaiSubTab('pec')" id="mSubTab-pec" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 text-white cursor-pointer">
+              PEC Chandigarh Alumni (<span id="mTabPecCount">0</span>)
+            </button>
+            <button onclick="switchMumbaiSubTab('other')" id="mSubTab-other" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
+              Other Target Contacts (<span id="mTabOtherCount">0</span>)
+            </button>
+            <button onclick="switchMumbaiSubTab('incomplete')" id="mSubTab-incomplete" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
+              Incomplete / Pending Accept (<span id="mTabIncompleteCount">0</span>)
+            </button>
+            <button onclick="switchMumbaiSubTab('completed')" id="mSubTab-completed" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
+              Completed Outreach (<span id="mTabCompletedCount">0</span>)
+            </button>
+            <button onclick="switchMumbaiSubTab('daily')" id="mSubTab-daily" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
+              Daily Activity Log
+            </button>
+          </div>
+
+          <!-- Contacts Lifecycle Table -->
+          <div id="mumbaiContactsTableWrap" class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3">Contact &amp; Role</th>
+                  <th class="p-3">Company &amp; Tier</th>
+                  <th class="p-3">Category &amp; Keyword</th>
+                  <th class="p-3">Lifecycle Status / Timing</th>
+                  <th class="p-3">Message / Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="mumbaiContactsTableBody">
+                <tr><td colspan="5" class="p-6 text-center text-slate-400">No contacts discovered yet. Select companies above and click "Find & Segregate Contacts".</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Daily Activity Table -->
+          <div id="mumbaiDailyTableWrap" class="hidden overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3">Date</th>
+                  <th class="p-3">Connection Requests Sent</th>
+                  <th class="p-3">Messages Sent (Direct + Follow-up)</th>
+                  <th class="p-3">2-Day Acceptances Detected</th>
+                  <th class="p-3">Completed Follow-ups</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="mumbaiDailyTableBody">
+                <tr><td colspan="5" class="p-6 text-center text-slate-400">No daily activity logged yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================== -->
       <!-- TAB 9: LIVE BACKGROUND TERMINAL            -->
       <!-- ========================================== -->
       <div id="view-terminal" class="hidden space-y-4">
@@ -1345,7 +1598,7 @@ MERAKI_UI_HTML = """
         activeNav.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm";
       }
 
-      ['dashboard', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
+      ['dashboard', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'mumbai', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
         const el = document.getElementById(`view-${t}`);
         if (el) el.classList.toggle('hidden', t !== tabId);
       });
@@ -1358,6 +1611,7 @@ MERAKI_UI_HTML = """
         forms: 'LinkedIn Feed Posts & Forms Desk',
         recruiters: 'Harvested Recruiter Emails',
         alumni: 'PEC Alumni & Referral Outreach',
+        mumbai: 'Mumbai Network Builder & 2-Day Follow-Up',
         naukri: 'Naukri Daily Recency Booster',
         manual: 'Manual Intervention Desk',
         resume: 'Active Master Resume & Two-Phase Referral Desk',
@@ -1382,6 +1636,7 @@ MERAKI_UI_HTML = """
         if (document.getElementById('sidebarFeedBadge')) document.getElementById('sidebarFeedBadge').innerText = d.feed_posts_count ?? 0;
         if (document.getElementById('sidebarEasyApplyBadge')) document.getElementById('sidebarEasyApplyBadge').innerText = d.easy_apply_count ?? 0;
         if (document.getElementById('sidebarFormsBadge')) document.getElementById('sidebarFormsBadge').innerText = d.feed_posts_count ?? 0;
+        if (document.getElementById('sidebarMumbaiBadge')) document.getElementById('sidebarMumbaiBadge').innerText = d.mumbai_companies_count ?? 0;
         document.getElementById('sidebarRecruitersBadge').innerText = d.recruiter_leads_count;
 
         document.getElementById('metricNaukri').innerText = d.naukri_today;
@@ -2533,6 +2788,350 @@ MERAKI_UI_HTML = """
       }
     }
 
+    // ==========================================
+    // MUMBAI NETWORK BUILDER & 2-DAY FOLLOW-UP JS
+    // ==========================================
+    let mumbaiWorkspaceData = null;
+    let currentMumbaiSizeFilter = 'all';
+    let currentMumbaiSubTab = 'pec';
+
+    async function loadMumbaiWorkspace() {
+      try {
+        const res = await fetch('/api/mumbai/summary');
+        const d = await res.json();
+        mumbaiWorkspaceData = d;
+
+        if (document.getElementById('mumbaiTodayConnects')) document.getElementById('mumbaiTodayConnects').innerText = d.today_stats?.connections_sent ?? 0;
+        if (document.getElementById('mumbaiTodayMessages')) document.getElementById('mumbaiTodayMessages').innerText = d.today_stats?.messages_sent ?? 0;
+        if (document.getElementById('mumbaiPecCount')) document.getElementById('mumbaiPecCount').innerText = d.counts?.pec ?? 0;
+        if (document.getElementById('mumbaiIncompleteCount')) document.getElementById('mumbaiIncompleteCount').innerText = d.counts?.incomplete ?? 0;
+        if (document.getElementById('mumbaiDue2DayCount')) document.getElementById('mumbaiDue2DayCount').innerText = d.counts?.due_2day ?? 0;
+        if (document.getElementById('mumbaiCompletedCount')) document.getElementById('mumbaiCompletedCount').innerText = d.counts?.completed ?? 0;
+
+        if (document.getElementById('mTabPecCount')) document.getElementById('mTabPecCount').innerText = d.counts?.pec ?? 0;
+        if (document.getElementById('mTabOtherCount')) document.getElementById('mTabOtherCount').innerText = d.counts?.other ?? 0;
+        if (document.getElementById('mTabIncompleteCount')) document.getElementById('mTabIncompleteCount').innerText = d.counts?.incomplete ?? 0;
+        if (document.getElementById('mTabCompletedCount')) document.getElementById('mTabCompletedCount').innerText = d.counts?.completed ?? 0;
+
+        renderMumbaiCompanies();
+        renderMumbaiContactsSubTab();
+      } catch (e) {}
+    }
+
+    function filterMumbaiSize(tier) {
+      currentMumbaiSizeFilter = tier;
+      const map = { 'all': 'btnMSizeAll', '250-500': 'btnMSize250', '500-1000': 'btnMSize500', '1000+': 'btnMSize1000' };
+      Object.values(map).forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.className = "px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200";
+      });
+      const active = document.getElementById(map[tier]);
+      if (active) active.className = "px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white";
+      renderMumbaiCompanies();
+    }
+
+    function renderMumbaiCompanies() {
+      const tbody = document.getElementById('mumbaiCompaniesTableBody');
+      if (!tbody || !mumbaiWorkspaceData) return;
+
+      let list = mumbaiWorkspaceData.companies || [];
+      if (currentMumbaiSizeFilter !== 'all') {
+        list = list.filter(c => c.size_tier === currentMumbaiSizeFilter);
+      }
+
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">No companies found for this size bracket. Click "Generate Mumbai Companies" above.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => {
+        const tierBadge = c.size_tier === '250-500'
+          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+          : (c.size_tier === '500-1000' ? 'bg-sky-100 text-sky-800 border-sky-200' : 'bg-purple-100 text-purple-800 border-purple-200');
+        const cnt = c.counts || { pec: 0, other: 0, incomplete: 0, completed: 0 };
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-2.5">
+              <input type="checkbox" class="mumbai-comp-cb rounded text-indigo-600 cursor-pointer" value="${c.id}">
+            </td>
+            <td class="p-2.5">
+              <button onclick="openMumbaiTemplateEditor('${c.id}')" class="text-left font-bold text-indigo-700 hover:text-indigo-900 hover:underline flex items-center gap-1.5 cursor-pointer" title="Click to customize PEC & Other message templates for ${c.name}">
+                <span>${c.name}</span>
+                <i class="fa-solid fa-pen-to-square text-[10px] text-indigo-400"></i>
+              </button>
+            </td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${tierBadge}">${c.size_tier} (~${c.employee_count})</span>
+            </td>
+            <td class="p-2.5 text-slate-500">${c.industry || 'Corporate'}</td>
+            <td class="p-2.5 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">${cnt.pec} PEC</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 ml-1">${cnt.other} Other</span>
+            </td>
+            <td class="p-2.5 whitespace-nowrap">
+              <span class="text-[11px] font-semibold text-rose-600">${cnt.incomplete} Pending</span>
+              <span class="text-slate-300 mx-1">/</span>
+              <span class="text-[11px] font-semibold text-teal-600">${cnt.completed} Done</span>
+            </td>
+            <td class="p-2.5 text-right whitespace-nowrap">
+              <button onclick="openMumbaiTemplateEditor('${c.id}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-semibold mr-1 cursor-pointer">
+                Templates
+              </button>
+              <button onclick="generateContactsSingleCompany('${c.id}')" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-[11px] font-semibold cursor-pointer">
+                Find Contacts
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function toggleAllMumbaiCompanies(master) {
+      document.querySelectorAll('.mumbai-comp-cb').forEach(cb => cb.checked = master.checked);
+    }
+
+    function openMumbaiTemplateEditor(companyId) {
+      if (!mumbaiWorkspaceData) return;
+      const comp = (mumbaiWorkspaceData.companies || []).find(c => String(c.id) === String(companyId));
+      if (!comp) return;
+
+      document.getElementById('tmplEditorCompanyId').value = comp.id;
+      document.getElementById('tmplEditorCompanyName').innerText = `${comp.name} (${comp.size_tier})`;
+      document.getElementById('tmplEditorPec').value = comp.pec_template || '';
+      document.getElementById('tmplEditorOther').value = comp.other_template || '';
+      const card = document.getElementById('mumbaiTemplateEditorCard');
+      card.classList.remove('hidden');
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function closeMumbaiTemplateEditor() {
+      document.getElementById('mumbaiTemplateEditorCard').classList.add('hidden');
+    }
+
+    async function saveMumbaiCompanyTemplates() {
+      const companyId = document.getElementById('tmplEditorCompanyId').value;
+      const pecTemplate = document.getElementById('tmplEditorPec').value;
+      const otherTemplate = document.getElementById('tmplEditorOther').value;
+
+      try {
+        const res = await fetch('/api/mumbai/companies/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_id: companyId, pec_template: pecTemplate, other_template: otherTemplate })
+        });
+        const d = await res.json();
+        if (d.success) {
+          alert('Saved custom PEC & Other templates for this company!');
+          loadMumbaiWorkspace();
+        } else {
+          alert('Error: ' + (d.error || 'Failed to save templates'));
+        }
+      } catch (e) {
+        alert('Network error: ' + e);
+      }
+    }
+
+    async function generateMumbaiCompanies() {
+      const btn = document.getElementById('btnGenMumbaiCompanies');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...'; }
+      try {
+        const res = await fetch('/api/mumbai/companies/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ try_live_linkedin: true }) });
+        const d = await res.json();
+        alert(d.message || 'Mumbai company generation started in background! Check Live Terminal or wait a few seconds.');
+        loadMumbaiWorkspace();
+      } catch (e) {
+        alert('Error: ' + e);
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate Mumbai Companies (By Size)'; }
+      }
+    }
+
+    async function addCustomMumbaiCompany() {
+      const name = document.getElementById('customMumbaiCompanyName').value.trim();
+      const sizeTier = document.getElementById('customMumbaiCompanySize').value;
+      if (!name) { alert('Please enter a company name (e.g. JP Morgan).'); return; }
+      try {
+        const res = await fetch('/api/mumbai/companies/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, size_tier: sizeTier })
+        });
+        const d = await res.json();
+        if (d.success) {
+          document.getElementById('customMumbaiCompanyName').value = '';
+          loadMumbaiWorkspace();
+          openMumbaiTemplateEditor(d.company.id);
+        }
+      } catch (e) {
+        alert('Network error: ' + e);
+      }
+    }
+
+    function _getSelectedMumbaiCompanyIds() {
+      return Array.from(document.querySelectorAll('.mumbai-comp-cb:checked')).map(cb => cb.value);
+    }
+
+    async function generateContactsSingleCompany(companyId) {
+      const kw = document.getElementById('mumbaiKeywordsInput').value;
+      try {
+        const res = await fetch('/api/mumbai/contacts/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: [companyId], keywords: kw })
+        });
+        const d = await res.json();
+        alert(d.message || 'Started extracting & segregating contacts (PEC vs Other) in background!');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
+    async function generateMumbaiContacts() {
+      const companyIds = _getSelectedMumbaiCompanyIds();
+      const kw = document.getElementById('mumbaiKeywordsInput').value;
+      try {
+        const res = await fetch('/api/mumbai/contacts/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: companyIds, keywords: kw, max_companies: 3 })
+        });
+        const d = await res.json();
+        alert(d.message || 'Contact discovery started in background! Watch Live Terminal.');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
+    async function runMumbaiOutreachCycle() {
+      const companyIds = _getSelectedMumbaiCompanyIds();
+      try {
+        const res = await fetch('/api/mumbai/outreach/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: companyIds, max_connects: 20, max_messages: 15 })
+        });
+        const d = await res.json();
+        alert(d.message || 'Connection maximization & messaging started in background!');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
+    async function runMumbai2DayFollowup() {
+      const checkAll = document.getElementById('mumbaiCheckAllPending')?.checked || false;
+      try {
+        const res = await fetch('/api/mumbai/followup/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ min_age_days: 2, check_all_pending: checkAll })
+        });
+        const d = await res.json();
+        alert(d.message || '2-Day acceptance verification started in background!');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
+    function switchMumbaiSubTab(sub) {
+      currentMumbaiSubTab = sub;
+      const styles = {
+        pec: 'bg-amber-600 text-white',
+        other: 'bg-sky-600 text-white',
+        incomplete: 'bg-rose-600 text-white',
+        completed: 'bg-teal-600 text-white',
+        daily: 'bg-indigo-600 text-white'
+      };
+      ['pec', 'other', 'incomplete', 'completed', 'daily'].forEach(k => {
+        const btn = document.getElementById(`mSubTab-${k}`);
+        if (btn) {
+          btn.className = k === sub
+            ? `px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${styles[k]}`
+            : 'px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer';
+        }
+      });
+
+      const isDaily = sub === 'daily';
+      document.getElementById('mumbaiContactsTableWrap').classList.toggle('hidden', isDaily);
+      document.getElementById('mumbaiDailyTableWrap').classList.toggle('hidden', !isDaily);
+      renderMumbaiContactsSubTab();
+    }
+
+    function renderMumbaiContactsSubTab() {
+      if (!mumbaiWorkspaceData) return;
+      if (currentMumbaiSubTab === 'daily') {
+        const dtbody = document.getElementById('mumbaiDailyTableBody');
+        const hist = mumbaiWorkspaceData.daily_history || [];
+        if (!hist.length) {
+          dtbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No daily activity logged yet.</td></tr>`;
+          return;
+        }
+        dtbody.innerHTML = hist.map(r => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-3 font-bold text-slate-800">${r.date}</td>
+            <td class="p-3 font-bold text-indigo-600">${r.connections_sent || 0}</td>
+            <td class="p-3 font-bold text-emerald-600">${r.messages_sent || 0}</td>
+            <td class="p-3 font-bold text-amber-600">${r.acceptances_detected || 0}</td>
+            <td class="p-3 font-bold text-teal-600">${r.completed_followups || 0}</td>
+          </tr>
+        `).join('');
+        return;
+      }
+
+      const tbody = document.getElementById('mumbaiContactsTableBody');
+      if (!tbody) return;
+
+      let rows = [];
+      if (currentMumbaiSubTab === 'pec') rows = mumbaiWorkspaceData.pec_contacts || [];
+      else if (currentMumbaiSubTab === 'other') rows = mumbaiWorkspaceData.other_contacts || [];
+      else if (currentMumbaiSubTab === 'incomplete') rows = mumbaiWorkspaceData.incomplete || [];
+      else if (currentMumbaiSubTab === 'completed') rows = mumbaiWorkspaceData.completed || [];
+
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No contacts in this category yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = rows.map(c => {
+        const catBadge = c.is_pec_alumni
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">PEC Chandigarh</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">Other</span>';
+
+        let stageBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Discovered</span>';
+        if (c.workflow_stage === 'incomplete_pending_accept') {
+          const days = c.days_pending ?? 0;
+          const dueBadge = c.due_for_2day_check ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-bold">2d+ DUE</span>' : '';
+          stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Incomplete (Day ${days})</span>${dueBadge}<div class="text-[10px] text-slate-400 mt-0.5">Sent: ${c.connection_sent_at || '--'}</div>`;
+        } else if (c.workflow_stage === 'completed') {
+          stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">Completed ✓</span><div class="text-[10px] text-slate-400 mt-0.5">Msg: ${c.messaged_at || '--'}</div>`;
+        }
+
+        const msgPreview = c.message_used
+          ? `<div class="text-[11px] text-slate-600 max-w-xs truncate" title="${c.message_used}">${c.message_used}</div>`
+          : `<span class="text-[11px] text-slate-400 italic">${c.connection_status === 'connected_ready' ? '1st Degree (Ready to Message)' : 'Will send invite/template'}</span>`;
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3">
+              <div class="font-bold text-slate-900">${c.name}</div>
+              <div class="text-[11px] text-slate-500 max-w-xs truncate" title="${c.headline}">${c.headline || ''}</div>
+            </td>
+            <td class="p-3">
+              <div class="font-semibold text-indigo-700">${c.company_name}</div>
+              <div class="text-[10px] text-slate-400">${c.size_tier || ''}</div>
+            </td>
+            <td class="p-3">
+              ${catBadge}
+              <div class="mt-1"><span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-semibold">${c.matched_keyword || 'Target'}</span></div>
+            </td>
+            <td class="p-3">${stageBadge}</td>
+            <td class="p-3">
+              ${msgPreview}
+              <a href="${c.profile_url}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-blue-600 font-semibold hover:underline mt-1">
+                <i class="fa-brands fa-linkedin"></i> View Profile ↗
+              </a>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
     // Polling Intervals
     setInterval(pollDashboardData, 3000);
     setInterval(pollLogs, 1500);
@@ -2544,6 +3143,7 @@ MERAKI_UI_HTML = """
     setInterval(loadNaukriApplied, 6000);
     setInterval(loadOutreachHistory, 5000);
     setInterval(loadDispatches, 8000);
+    setInterval(loadMumbaiWorkspace, 6000);
 
     pollDashboardData();
     pollLogs();
@@ -2553,6 +3153,7 @@ MERAKI_UI_HTML = """
     loadEasyApplyJobs();
     loadRecruiterLeads();
     loadNaukriApplied();
+    loadMumbaiWorkspace();
     loadOutreachHistory();
     loadTemplates();
     loadResumeStatus();
@@ -2961,6 +3562,176 @@ def dispatches_route():
     return jsonify({"dispatches": engine.get_dispatches()})
 
 
+# ==============================================================================
+# MUMBAI NETWORK & 2-DAY FOLLOW-UP API ROUTES
+# ==============================================================================
+@app.route("/api/mumbai/summary")
+def mumbai_summary_route():
+    engine = MumbaiOutreachEngine()
+    return jsonify(engine.get_workspace_summary())
+
+
+@app.route("/api/mumbai/companies/generate", methods=["POST"])
+def mumbai_generate_companies_route():
+    data = request.json or {}
+    try_live = data.get("try_live_linkedin", True)
+    if CURRENT_TASK["running"] and try_live:
+        # Still merge curated instantaneously if background browser is busy
+        engine = MumbaiOutreachEngine()
+        res = engine.generate_mumbai_companies(try_live_linkedin=False, log_cb=add_log)
+        return jsonify({"success": True, "message": "Merged Mumbai companies directory (250-500 -> 500-1000 -> 1000+).", **res})
+
+    def _run():
+        global CURRENT_TASK
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai Companies Discovery"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.generate_mumbai_companies(try_live_linkedin=try_live, log_cb=add_log)
+        except Exception as e:
+            add_log(f"ERROR in Mumbai company generation: {e}")
+        finally:
+            CURRENT_TASK["running"] = False
+            CURRENT_TASK["name"] = "Idle"
+            CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started Mumbai Companies generation (250-500 → 500-1000 → 1000+) in background."})
+
+
+@app.route("/api/mumbai/companies/add", methods=["POST"])
+def mumbai_add_company_route():
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    size_tier = data.get("size_tier", "1000+")
+    if not name:
+        return jsonify({"success": False, "error": "Company name is required"}), 400
+    engine = MumbaiOutreachEngine()
+    comp = engine.add_custom_company(name=name, size_tier=size_tier, industry=data.get("industry", "Corporate / Fintech"))
+    add_log(f"➕ Added Mumbai company '{comp['name']}' ({comp['size_tier']} tier).")
+    return jsonify({"success": True, "company": comp})
+
+
+@app.route("/api/mumbai/companies/templates", methods=["POST"])
+def mumbai_save_templates_route():
+    data = request.json or {}
+    company_id = data.get("company_id")
+    pec_template = data.get("pec_template")
+    other_template = data.get("other_template")
+    if not company_id:
+        return jsonify({"success": False, "error": "Missing company_id"}), 400
+    engine = MumbaiOutreachEngine()
+    updated = engine.update_company_templates(company_id, pec_template, other_template)
+    if not updated:
+        return jsonify({"success": False, "error": "Company not found"}), 404
+    add_log(f"💾 Saved custom PEC Alumni & Other templates for '{updated['name']}'.")
+    return jsonify({"success": True, "company": updated})
+
+
+@app.route("/api/mumbai/contacts/generate", methods=["POST"])
+def mumbai_generate_contacts_route():
+    if CURRENT_TASK["running"]:
+        return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
+
+    data = request.json or {}
+    company_ids = data.get("company_ids", [])
+    raw_kw = data.get("keywords", "Founder's Office, HR, Talent, Product, Analyst")
+    keywords = [k.strip() for k in raw_kw.split(",") if k.strip()] if isinstance(raw_kw, str) else raw_kw
+    max_companies = int(data.get("max_companies", 3))
+
+    def _run():
+        global CURRENT_TASK
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai Contacts Keyword Extraction"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.generate_contacts_for_companies(
+                company_ids=company_ids or None,
+                keywords=keywords,
+                max_companies=max_companies,
+                log_cb=add_log
+            )
+        except Exception as e:
+            add_log(f"ERROR extracting Mumbai company contacts: {e}")
+        finally:
+            CURRENT_TASK["running"] = False
+            CURRENT_TASK["name"] = "Idle"
+            CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started LinkedIn contact extraction & PEC/Other segregation in background!"})
+
+
+@app.route("/api/mumbai/outreach/run", methods=["POST"])
+def mumbai_run_outreach_route():
+    if CURRENT_TASK["running"]:
+        return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
+
+    data = request.json or {}
+    company_ids = data.get("company_ids", [])
+    contact_ids = data.get("contact_ids", [])
+    max_connects = int(data.get("max_connects", 20))
+    max_messages = int(data.get("max_messages", 15))
+
+    def _run():
+        global CURRENT_TASK
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai Connect & Outreach Cycle"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.run_connect_and_message_cycle(
+                company_ids=company_ids or None,
+                contact_ids=contact_ids or None,
+                max_connects=max_connects,
+                max_messages=max_messages,
+                log_cb=add_log
+            )
+        except Exception as e:
+            add_log(f"ERROR in Mumbai connect & outreach cycle: {e}")
+        finally:
+            CURRENT_TASK["running"] = False
+            CURRENT_TASK["name"] = "Idle"
+            CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started Connection Maximization & 1st-Degree Messaging cycle in background!"})
+
+
+@app.route("/api/mumbai/followup/check", methods=["POST"])
+def mumbai_followup_check_route():
+    if CURRENT_TASK["running"]:
+        return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
+
+    data = request.json or {}
+    min_age_days = int(data.get("min_age_days", 2))
+    check_all_pending = bool(data.get("check_all_pending", False))
+
+    def _run():
+        global CURRENT_TASK
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai 2-Day Acceptance Follow-Up"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.run_2day_followup_check(
+                min_age_days=min_age_days,
+                check_all_pending=check_all_pending,
+                log_cb=add_log
+            )
+        except Exception as e:
+            add_log(f"ERROR in 2-day follow-up check: {e}")
+        finally:
+            CURRENT_TASK["running"] = False
+            CURRENT_TASK["name"] = "Idle"
+            CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started 2-Day Acceptance Follow-Up Check in background!"})
+
+
 def load_json_file(filepath: str, default: dict) -> dict:
     if os.path.exists(filepath):
         try:
@@ -3236,6 +4007,12 @@ def execute_task(task_type):
             results = engine.check_inbox_and_dispatch_resume()
             add_log(f"SUCCESS: LinkedIn Inbox Scan finished. Dispatched resumes to {len(results)} contacts.")
 
+        elif task_type == "mumbai_followup":
+            add_log("🏙️ Running Automated 2-Day Mumbai Connection Acceptance Check...")
+            meng = MumbaiOutreachEngine()
+            res = meng.run_2day_followup_check(min_age_days=2, check_all_pending=False, log_cb=add_log)
+            add_log(f"✅ Mumbai 2-Day Check finished: {res.get('accepted_and_messaged', 0)} accepted & messaged, {res.get('still_pending', 0)} still pending.")
+
     except Exception as e:
         add_log(f"ERROR during {task_type}: {e}")
     finally:
@@ -3329,6 +4106,12 @@ def autonomous_10h_scheduler():
                 if apply_pm_key not in completed and (current_hour > 15 or (current_hour == 15 and current_min >= 30)):
                     record_milestone(apply_pm_key)
                     scheduled_job("naukri_apply")
+
+                # Milestone 3B: 11:00 AM Daily 2-Day Mumbai Follow-Up Acceptance Check
+                mumbai_2d_key = f"{today_str}_mumbai_followup_2d"
+                if mumbai_2d_key not in completed and current_hour >= 11:
+                    record_milestone(mumbai_2d_key)
+                    scheduled_job("mumbai_followup")
 
                 # Milestone 4: 06:45 PM Evening Gmail Sweep
                 gmail_pm_key = f"{today_str}_gmail_pm"

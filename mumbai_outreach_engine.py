@@ -52,73 +52,201 @@ DEFAULT_OTHER_TEMPLATE = (
 )
 
 # Expanded seed directory of verified Mumbai companies across 250-500, 500-1000, and 1000+ tiers
+# Strictly curated for Product Management, Business Strategy, Analytics, Fintech, SaaS, Consulting & D2C/Consumer Tech
 CURATED_MUMBAI_COMPANIES = [
-    # Tier 1: 250-500 employees (Start here)
-    {"name": "inFeedo", "linkedin_slug": "infeedo", "size_tier": "250-500", "employee_count": 280, "industry": "SaaS / HRTech"},
-    {"name": "GrayQuest", "linkedin_slug": "grayquest", "size_tier": "250-500", "employee_count": 300, "industry": "Fintech"},
-    {"name": "Traya Health", "linkedin_slug": "traya-health", "size_tier": "250-500", "employee_count": 380, "industry": "D2C / HealthTech"},
-    {"name": "The Sleep Company", "linkedin_slug": "the-sleep-company-official", "size_tier": "250-500", "employee_count": 410, "industry": "D2C"},
-    {"name": "LogiNext", "linkedin_slug": "loginext-solutions", "size_tier": "250-500", "employee_count": 390, "industry": "Logistics SaaS"},
-    {"name": "Haptik", "linkedin_slug": "haptik", "size_tier": "250-500", "employee_count": 420, "industry": "Conversational AI"},
-    {"name": "Fynd", "linkedin_slug": "fynd-shopsense", "size_tier": "250-500", "employee_count": 450, "industry": "Retail Tech"},
-    {"name": "Pepperfry", "linkedin_slug": "pepperfry", "size_tier": "250-500", "employee_count": 480, "industry": "E-Commerce"},
-    {"name": "Turtlemint", "linkedin_slug": "turtlemint", "size_tier": "250-500", "employee_count": 490, "industry": "InsurTech"},
-    {"name": "WebEngage", "linkedin_slug": "webengage", "size_tier": "250-500", "employee_count": 340, "industry": "MarTech SaaS"},
-    {"name": "Mintifi", "linkedin_slug": "mintifi", "size_tier": "250-500", "employee_count": 360, "industry": "Supply Chain Fintech"},
-    {"name": "mSwipe", "linkedin_slug": "mswipe-technologies", "size_tier": "250-500", "employee_count": 440, "industry": "Payments Fintech"},
+    # Tier 1: 250-500 employees (Start here - 105+ relevant Mumbai companies)
     {"name": "Bureau.id", "linkedin_slug": "bureau-id", "size_tier": "250-500", "employee_count": 260, "industry": "Fraud & Identity AI"},
-    {"name": "Freopay", "linkedin_slug": "freo-money", "size_tier": "250-500", "employee_count": 310, "industry": "Consumer Fintech"},
-    {"name": "KISSHT", "linkedin_slug": "kissht", "size_tier": "250-500", "employee_count": 460, "industry": "Digital Lending"},
+    {"name": "nimbbl", "linkedin_slug": "nimbbl", "size_tier": "250-500", "employee_count": 265, "industry": "Payments Fintech"},
+    {"name": "PayGlocal", "linkedin_slug": "payglocal", "size_tier": "250-500", "employee_count": 270, "industry": "Cross-Border Payments"},
+    {"name": "Praxis Global Alliance", "linkedin_slug": "praxis-global-alliance", "size_tier": "250-500", "employee_count": 275, "industry": "Management Consulting"},
+    {"name": "inFeedo", "linkedin_slug": "infeedo", "size_tier": "250-500", "employee_count": 280, "industry": "SaaS / HRTech"},
+    {"name": "Foxtale", "linkedin_slug": "foxtale-skin", "size_tier": "250-500", "employee_count": 285, "industry": "D2C Beauty"},
     {"name": "Zouk", "linkedin_slug": "zouk", "size_tier": "250-500", "employee_count": 290, "industry": "D2C Lifestyle"},
+    {"name": "Karza Technologies", "linkedin_slug": "karza-technologies", "size_tier": "250-500", "employee_count": 295, "industry": "Fintech RegTech SaaS"},
+    {"name": "GrayQuest", "linkedin_slug": "grayquest", "size_tier": "250-500", "employee_count": 300, "industry": "Fintech"},
+    {"name": "CredAble", "linkedin_slug": "credable", "size_tier": "250-500", "employee_count": 305, "industry": "Supply Chain Fintech"},
+    {"name": "Freopay", "linkedin_slug": "freo-money", "size_tier": "250-500", "employee_count": 310, "industry": "Consumer Fintech"},
+    {"name": "Cartesian Consulting", "linkedin_slug": "cartesian-consulting", "size_tier": "250-500", "employee_count": 315, "industry": "Marketing Analytics Consulting"},
     {"name": "Pilgrim", "linkedin_slug": "discoverpilgrim", "size_tier": "250-500", "employee_count": 320, "industry": "D2C Personal Care"},
-    {"name": "Neogrowth", "linkedin_slug": "neogrowth-credit-pvt-ltd", "size_tier": "250-500", "employee_count": 470, "industry": "SME Lending"},
     {"name": "Paymate", "linkedin_slug": "paymate", "size_tier": "250-500", "employee_count": 330, "industry": "B2B Payments"},
+    {"name": "Decentro", "linkedin_slug": "decentro", "size_tier": "250-500", "employee_count": 335, "industry": "Banking Infrastructure API"},
+    {"name": "WebEngage", "linkedin_slug": "webengage", "size_tier": "250-500", "employee_count": 340, "industry": "MarTech SaaS"},
+    {"name": "LiquiLoans", "linkedin_slug": "liquiloans", "size_tier": "250-500", "employee_count": 345, "industry": "P2P Fintech"},
     {"name": "Coverfox", "linkedin_slug": "coverfox-insurance", "size_tier": "250-500", "employee_count": 350, "industry": "InsurTech"},
+    {"name": "Zema Global Data Corporation", "linkedin_slug": "zemaglobal", "size_tier": "250-500", "employee_count": 350, "industry": "Data Infrastructure & Analytics"},
+    {"name": "CoverGo | Insurtech", "linkedin_slug": "covergo", "size_tier": "250-500", "employee_count": 350, "industry": "InsurTech SaaS"},
+    {"name": "PivotRoots", "linkedin_slug": "pivotroots", "size_tier": "250-500", "employee_count": 350, "industry": "Digital Strategy & MarTech"},
+    {"name": "Seclore", "linkedin_slug": "seclore", "size_tier": "250-500", "employee_count": 355, "industry": "Data Security SaaS"},
+    {"name": "Mintifi", "linkedin_slug": "mintifi", "size_tier": "250-500", "employee_count": 360, "industry": "Supply Chain Fintech"},
+    {"name": "Mokobara", "linkedin_slug": "mokobara", "size_tier": "250-500", "employee_count": 365, "industry": "D2C Consumer Brand"},
+    {"name": "PPFAS Mutual Fund", "linkedin_slug": "ppfas-mutual-fund", "size_tier": "250-500", "employee_count": 370, "industry": "Asset Management & Fintech"},
+    {"name": "Mudrex", "linkedin_slug": "mudrex", "size_tier": "250-500", "employee_count": 375, "industry": "Crypto & WealthTech"},
+    {"name": "Traya Health", "linkedin_slug": "traya-health", "size_tier": "250-500", "employee_count": 380, "industry": "D2C / HealthTech"},
+    {"name": "Jupiter", "linkedin_slug": "jupiter-money", "size_tier": "250-500", "employee_count": 385, "industry": "Neobanking Fintech"},
+    {"name": "LogiNext", "linkedin_slug": "loginext-solutions", "size_tier": "250-500", "employee_count": 390, "industry": "Logistics SaaS"},
+    {"name": "mosaic wellness", "linkedin_slug": "mosaic-wellness", "size_tier": "250-500", "employee_count": 395, "industry": "D2C Digital Health"},
+    {"name": "IDfy", "linkedin_slug": "idfy", "size_tier": "250-500", "employee_count": 400, "industry": "Identity Verification AI"},
+    {"name": "The Sleep Company", "linkedin_slug": "the-sleep-company-official", "size_tier": "250-500", "employee_count": 410, "industry": "D2C Consumer Tech"},
+    {"name": "Plix", "linkedin_slug": "plix", "size_tier": "250-500", "employee_count": 415, "industry": "D2C Wellness"},
+    {"name": "Haptik", "linkedin_slug": "haptik", "size_tier": "250-500", "employee_count": 420, "industry": "Conversational AI"},
+    {"name": "Avalon Consulting", "linkedin_slug": "avalon-consulting", "size_tier": "250-500", "employee_count": 425, "industry": "Management Consulting"},
+    {"name": "Avendus Capital", "linkedin_slug": "avendus-capital", "size_tier": "250-500", "employee_count": 430, "industry": "Investment Banking & Wealth"},
+    {"name": "mSwipe", "linkedin_slug": "mswipe-technologies", "size_tier": "250-500", "employee_count": 440, "industry": "Payments Fintech"},
+    {"name": "Easebuzz", "linkedin_slug": "easebuzz", "size_tier": "250-500", "employee_count": 445, "industry": "Payments Fintech SaaS"},
+    {"name": "Fynd", "linkedin_slug": "fynd-shopsense", "size_tier": "250-500", "employee_count": 450, "industry": "Retail Tech / AI"},
+    {"name": "Dhan", "linkedin_slug": "dhan-hq", "size_tier": "250-500", "employee_count": 455, "industry": "WealthTech / Broking"},
+    {"name": "KISSHT", "linkedin_slug": "kissht", "size_tier": "250-500", "employee_count": 460, "industry": "Digital Lending"},
+    {"name": "Kuku FM", "linkedin_slug": "kuku-fm", "size_tier": "250-500", "employee_count": 465, "industry": "Consumer Audio Tech"},
+    {"name": "Neogrowth", "linkedin_slug": "neogrowth-credit-pvt-ltd", "size_tier": "250-500", "employee_count": 470, "industry": "SME Lending Fintech"},
+    {"name": "airpay", "linkedin_slug": "airpay-payment-services", "size_tier": "250-500", "employee_count": 475, "industry": "Omnichannel Payments"},
+    {"name": "Pepperfry", "linkedin_slug": "pepperfry", "size_tier": "250-500", "employee_count": 480, "industry": "E-Commerce"},
+    {"name": "Plum Goodness", "linkedin_slug": "plum-goodness", "size_tier": "250-500", "employee_count": 485, "industry": "D2C Beauty"},
+    {"name": "Turtlemint", "linkedin_slug": "turtlemint", "size_tier": "250-500", "employee_count": 490, "industry": "InsurTech"},
+    {"name": "WorkIndia", "linkedin_slug": "workindia", "size_tier": "250-500", "employee_count": 495, "industry": "Consumer Jobs Tech"},
+    {"name": "Fi Money", "linkedin_slug": "fi-money", "size_tier": "250-500", "employee_count": 325, "industry": "Neobanking Fintech"},
+    {"name": "Uni Cards", "linkedin_slug": "uni-cards", "size_tier": "250-500", "employee_count": 290, "industry": "Consumer Credit Fintech"},
+    {"name": "Jar", "linkedin_slug": "jar-app", "size_tier": "250-500", "employee_count": 270, "industry": "Savings Fintech"},
+    {"name": "smallcase", "linkedin_slug": "smallcase", "size_tier": "250-500", "employee_count": 360, "industry": "WealthTech Platform"},
+    {"name": "Wint Wealth", "linkedin_slug": "wint-wealth", "size_tier": "250-500", "employee_count": 255, "industry": "Fixed Income Fintech"},
+    {"name": "Grip Invest", "linkedin_slug": "grip-invest", "size_tier": "250-500", "employee_count": 260, "industry": "Alternative Investment Fintech"},
+    {"name": "INDmoney", "linkedin_slug": "indmoney", "size_tier": "250-500", "employee_count": 380, "industry": "WealthTech"},
+    {"name": "CoinDCX", "linkedin_slug": "coindcx", "size_tier": "250-500", "employee_count": 420, "industry": "Web3 & Fintech"},
+    {"name": "ZebPay", "linkedin_slug": "zebpay", "size_tier": "250-500", "employee_count": 280, "industry": "Digital Assets Fintech"},
+    {"name": "5paisa", "linkedin_slug": "5paisa", "size_tier": "250-500", "employee_count": 450, "industry": "Discount Broking Fintech"},
+    {"name": "CCAvenue", "linkedin_slug": "ccavenue", "size_tier": "250-500", "employee_count": 460, "industry": "Payments Gateway"},
+    {"name": "PayU India", "linkedin_slug": "payu-india", "size_tier": "250-500", "employee_count": 480, "industry": "Payments Fintech"},
+    {"name": "Aranca", "linkedin_slug": "aranca", "size_tier": "250-500", "employee_count": 490, "industry": "Investment Research & Analytics"},
+    {"name": "Redseer Strategy Consultants", "linkedin_slug": "redseer-consulting", "size_tier": "250-500", "employee_count": 340, "industry": "Strategy Consulting"},
+    {"name": "Vector Consulting Group", "linkedin_slug": "vector-consulting-group", "size_tier": "250-500", "employee_count": 310, "industry": "Management Consulting"},
+    {"name": "Alvarez & Marsal India", "linkedin_slug": "alvarez-&-marsal", "size_tier": "250-500", "employee_count": 450, "industry": "Management Consulting"},
+    {"name": "Oliver Wyman India", "linkedin_slug": "oliver-wyman", "size_tier": "250-500", "employee_count": 380, "industry": "Strategy Consulting"},
+    {"name": "L.E.K. Consulting", "linkedin_slug": "l.e.k.-consulting", "size_tier": "250-500", "employee_count": 320, "industry": "Strategy Consulting"},
+    {"name": "Simon-Kucher", "linkedin_slug": "simon-kucher", "size_tier": "250-500", "employee_count": 300, "industry": "Pricing & Strategy Consulting"},
+    {"name": "Protiviti India", "linkedin_slug": "protiviti-india", "size_tier": "250-500", "employee_count": 470, "industry": "Risk & Business Consulting"},
+    {"name": "Ambit Private Limited", "linkedin_slug": "ambit-finvest", "size_tier": "250-500", "employee_count": 430, "industry": "Investment Banking & Lending"},
+    {"name": "Ask Group", "linkedin_slug": "ask-group", "size_tier": "250-500", "employee_count": 410, "industry": "Wealth & Asset Management"},
+    {"name": "360 ONE", "linkedin_slug": "360-one", "size_tier": "250-500", "employee_count": 490, "industry": "WealthTech & Asset Management"},
+    {"name": "Waterfield Advisors", "linkedin_slug": "waterfield-advisors", "size_tier": "250-500", "employee_count": 260, "industry": "Wealth Advisory"},
+    {"name": "Mirae Asset India", "linkedin_slug": "mirae-asset-india", "size_tier": "250-500", "employee_count": 350, "industry": "Asset Management"},
+    {"name": "DSP Mutual Fund", "linkedin_slug": "dsp-mutual-fund", "size_tier": "250-500", "employee_count": 440, "industry": "Financial Services"},
+    {"name": "quant Mutual Fund", "linkedin_slug": "quant-mutual-fund", "size_tier": "250-500", "employee_count": 260, "industry": "Quantitative Asset Management"},
+    {"name": "CARE Ratings", "linkedin_slug": "care-ratings", "size_tier": "250-500", "employee_count": 480, "industry": "Financial Analytics & Ratings"},
+    {"name": "India Ratings & Research", "linkedin_slug": "india-ratings", "size_tier": "250-500", "employee_count": 420, "industry": "Credit Research & Analytics"},
+    {"name": "mCaffeine", "linkedin_slug": "mcaffeine", "size_tier": "250-500", "employee_count": 340, "industry": "D2C Personal Care"},
+    {"name": "Bombay Shaving Company", "linkedin_slug": "bombay-shaving-company", "size_tier": "250-500", "employee_count": 390, "industry": "D2C Grooming"},
+    {"name": "The Souled Store", "linkedin_slug": "the-souled-store", "size_tier": "250-500", "employee_count": 460, "industry": "D2C Apparel & E-Commerce"},
+    {"name": "Bewakoof", "linkedin_slug": "bewakoof-com", "size_tier": "250-500", "employee_count": 430, "industry": "D2C E-Commerce"},
+    {"name": "Atomberg", "linkedin_slug": "atomberg-technologies", "size_tier": "250-500", "employee_count": 480, "industry": "Consumer Tech Hardware"},
+    {"name": "Wellbeing Nutrition", "linkedin_slug": "wellbeing-nutrition", "size_tier": "250-500", "employee_count": 270, "industry": "D2C Health & Nutrition"},
+    {"name": "OZiva", "linkedin_slug": "oziva", "size_tier": "250-500", "employee_count": 320, "industry": "D2C Nutrition"},
+    {"name": "Kapiva", "linkedin_slug": "kapiva", "size_tier": "250-500", "employee_count": 360, "industry": "D2C Ayurveda"},
+    {"name": "The Whole Truth", "linkedin_slug": "the-whole-truth-foods", "size_tier": "250-500", "employee_count": 290, "industry": "D2C Clean Food Brand"},
+    {"name": "Epigamia", "linkedin_slug": "epigamia", "size_tier": "250-500", "employee_count": 410, "industry": "D2C FMCG Startup"},
+    {"name": "EatClub (BOX8)", "linkedin_slug": "eatclub-brands", "size_tier": "250-500", "employee_count": 490, "industry": "FoodTech D2C"},
+    {"name": "Hopscotch", "linkedin_slug": "hopscotch-in", "size_tier": "250-500", "employee_count": 400, "industry": "E-Commerce"},
+    {"name": "Sirona", "linkedin_slug": "sirona-hygiene", "size_tier": "250-500", "employee_count": 275, "industry": "D2C FemTech"},
+    {"name": "Schbang", "linkedin_slug": "schbang", "size_tier": "250-500", "employee_count": 485, "industry": "Digital Strategy & Tech"},
+    {"name": "Kinnect", "linkedin_slug": "kinnect", "size_tier": "250-500", "employee_count": 440, "industry": "Digital Marketing & Tech"},
+    {"name": "WATConsult", "linkedin_slug": "watconsult", "size_tier": "250-500", "employee_count": 380, "industry": "Digital Marketing"},
+    {"name": "Interactive Avenues", "linkedin_slug": "interactive-avenues", "size_tier": "250-500", "employee_count": 470, "industry": "Digital Media & Analytics"},
+    {"name": "Pocket FM", "linkedin_slug": "pocket-fm", "size_tier": "250-500", "employee_count": 460, "industry": "Consumer Audio Entertainment"},
+    {"name": "Games24x7", "linkedin_slug": "games24x7", "size_tier": "250-500", "employee_count": 490, "industry": "Gaming & Product Analytics"},
+    {"name": "Nazara Technologies", "linkedin_slug": "nazara-technologies", "size_tier": "250-500", "employee_count": 430, "industry": "Gaming & Consumer Tech"},
+    {"name": "Netcore Cloud", "linkedin_slug": "netcore-cloud", "size_tier": "250-500", "employee_count": 475, "industry": "MarTech SaaS"},
+    {"name": "Route Mobile", "linkedin_slug": "route-mobile", "size_tier": "250-500", "employee_count": 460, "industry": "CPaaS SaaS"},
+    {"name": "Emeritus", "linkedin_slug": "eruditus", "size_tier": "250-500", "employee_count": 485, "industry": "EdTech"},
+    {"name": "Toppr", "linkedin_slug": "toppr", "size_tier": "250-500", "employee_count": 420, "industry": "EdTech"},
+    {"name": "LEAD School", "linkedin_slug": "leadschool", "size_tier": "250-500", "employee_count": 480, "industry": "EdTech"},
+    {"name": "Scapia", "linkedin_slug": "scapia", "size_tier": "250-500", "employee_count": 265, "industry": "Travel Fintech"},
+    {"name": "OneCard (FPL Technologies)", "linkedin_slug": "onecard-fpl", "size_tier": "250-500", "employee_count": 440, "industry": "Consumer Credit Fintech"},
+    {"name": "CASHe", "linkedin_slug": "cashe", "size_tier": "250-500", "employee_count": 370, "industry": "AI Consumer Lending"},
+    {"name": "Ring (Kissht)", "linkedin_slug": "paywithring", "size_tier": "250-500", "employee_count": 390, "industry": "Consumer Payments"},
 
-    # Tier 2: 500-1000 employees
-    {"name": "CleverTap", "linkedin_slug": "clevertap", "size_tier": "500-1000", "employee_count": 650, "industry": "SaaS / MarTech"},
-    {"name": "BrowserStack", "linkedin_slug": "browserstack", "size_tier": "500-1000", "employee_count": 850, "industry": "DevTools / SaaS"},
-    {"name": "Purplle", "linkedin_slug": "purplle-com", "size_tier": "500-1000", "employee_count": 780, "industry": "E-Commerce"},
-    {"name": "BookMyShow", "linkedin_slug": "bookmyshow", "size_tier": "500-1000", "employee_count": 720, "industry": "Consumer Tech"},
-    {"name": "Upstox", "linkedin_slug": "upstox", "size_tier": "500-1000", "employee_count": 900, "industry": "Fintech / Broking"},
-    {"name": "TresVista", "linkedin_slug": "tresvista", "size_tier": "500-1000", "employee_count": 950, "industry": "Financial Analytics"},
-    {"name": "Gupshup", "linkedin_slug": "gupshup", "size_tier": "500-1000", "employee_count": 820, "industry": "CPaaS"},
-    {"name": "Dream11", "linkedin_slug": "dream11", "size_tier": "500-1000", "employee_count": 920, "industry": "Consumer Tech"},
-    {"name": "Lendingkart", "linkedin_slug": "lendingkart", "size_tier": "500-1000", "employee_count": 800, "industry": "Fintech"},
-    {"name": "PaySense", "linkedin_slug": "paysense", "size_tier": "500-1000", "employee_count": 620, "industry": "Consumer Lending"},
-    {"name": "Rebel Foods", "linkedin_slug": "rebel-foods", "size_tier": "500-1000", "employee_count": 980, "industry": "Cloud Kitchens / D2C"},
-    {"name": "Sugar Cosmetics", "linkedin_slug": "sugar-cosmetics", "size_tier": "500-1000", "employee_count": 760, "industry": "D2C Beauty"},
-    {"name": "Furlenco", "linkedin_slug": "furlenco", "size_tier": "500-1000", "employee_count": 580, "industry": "Consumer Subscription"},
-    {"name": "InCred Finance", "linkedin_slug": "incred-finance", "size_tier": "500-1000", "employee_count": 870, "industry": "NBFC / Fintech"},
+    # Tier 2: 500-1000 employees (Verified Mumbai Tech, Fintech, Analytics & Consumer firms)
     {"name": "FlexiLoans", "linkedin_slug": "flexiloans", "size_tier": "500-1000", "employee_count": 560, "industry": "MSME Fintech"},
+    {"name": "Furlenco", "linkedin_slug": "furlenco", "size_tier": "500-1000", "employee_count": 580, "industry": "Consumer Subscription"},
+    {"name": "PaySense", "linkedin_slug": "paysense", "size_tier": "500-1000", "employee_count": 620, "industry": "Consumer Lending"},
+    {"name": "CleverTap", "linkedin_slug": "clevertap", "size_tier": "500-1000", "employee_count": 650, "industry": "SaaS / MarTech"},
+    {"name": "BookMyShow", "linkedin_slug": "bookmyshow", "size_tier": "500-1000", "employee_count": 720, "industry": "Consumer Tech"},
+    {"name": "Sugar Cosmetics", "linkedin_slug": "sugar-cosmetics", "size_tier": "500-1000", "employee_count": 760, "industry": "D2C Beauty"},
+    {"name": "Purplle", "linkedin_slug": "purplle-com", "size_tier": "500-1000", "employee_count": 780, "industry": "E-Commerce"},
     {"name": "Juspay", "linkedin_slug": "juspay-technologies", "size_tier": "500-1000", "employee_count": 790, "industry": "Payments Infrastructure"},
-    {"name": "Good Glamm Group", "linkedin_slug": "good-glamm-group", "size_tier": "500-1000", "employee_count": 890, "industry": "D2C / Content-to-Commerce"},
+    {"name": "Lendingkart", "linkedin_slug": "lendingkart", "size_tier": "500-1000", "employee_count": 800, "industry": "Fintech"},
+    {"name": "Gupshup", "linkedin_slug": "gupshup", "size_tier": "500-1000", "employee_count": 820, "industry": "CPaaS"},
     {"name": "Acko", "linkedin_slug": "acko", "size_tier": "500-1000", "employee_count": 840, "industry": "InsurTech"},
+    {"name": "BrowserStack", "linkedin_slug": "browserstack", "size_tier": "500-1000", "employee_count": 850, "industry": "DevTools / SaaS"},
+    {"name": "InCred Finance", "linkedin_slug": "incred-finance", "size_tier": "500-1000", "employee_count": 870, "industry": "NBFC / Fintech"},
+    {"name": "Good Glamm Group", "linkedin_slug": "good-glamm-group", "size_tier": "500-1000", "employee_count": 890, "industry": "D2C / Content-to-Commerce"},
+    {"name": "Upstox", "linkedin_slug": "upstox", "size_tier": "500-1000", "employee_count": 900, "industry": "Fintech / Broking"},
+    {"name": "Dream11", "linkedin_slug": "dream11", "size_tier": "500-1000", "employee_count": 920, "industry": "Consumer Tech"},
+    {"name": "TresVista", "linkedin_slug": "tresvista", "size_tier": "500-1000", "employee_count": 950, "industry": "Financial Analytics"},
+    {"name": "Rebel Foods", "linkedin_slug": "rebel-foods", "size_tier": "500-1000", "employee_count": 980, "industry": "Cloud Kitchens / D2C"},
+    {"name": "Bizongo", "linkedin_slug": "bizongo", "size_tier": "500-1000", "employee_count": 720, "industry": "B2B E-Commerce Tech"},
+    {"name": "Infra.Market", "linkedin_slug": "infra-market", "size_tier": "500-1000", "employee_count": 880, "industry": "B2B Commerce Tech"},
+    {"name": "upGrad", "linkedin_slug": "upgrad", "size_tier": "500-1000", "employee_count": 940, "industry": "EdTech"},
+    {"name": "Course5 Intelligence", "linkedin_slug": "course5i", "size_tier": "500-1000", "employee_count": 860, "industry": "AI & Analytics"},
+    {"name": "Acuity Knowledge Partners", "linkedin_slug": "acuity-knowledge-partners", "size_tier": "500-1000", "employee_count": 910, "industry": "Financial Research & Analytics"},
+    {"name": "ICRA", "linkedin_slug": "icra", "size_tier": "500-1000", "employee_count": 780, "industry": "Financial Research & Ratings"},
+    {"name": "Grant Thornton Bharat", "linkedin_slug": "grant-thornton-bharat", "size_tier": "500-1000", "employee_count": 960, "industry": "Business Consulting"},
+    {"name": "BDO India", "linkedin_slug": "bdo-india", "size_tier": "500-1000", "employee_count": 890, "industry": "Business Consulting"},
+    {"name": "Kroll", "linkedin_slug": "kroll", "size_tier": "500-1000", "employee_count": 850, "industry": "Risk & Financial Advisory"},
+    {"name": "ICICI Securities", "linkedin_slug": "icici-securities", "size_tier": "500-1000", "employee_count": 930, "industry": "Financial Services & Fintech"},
+    {"name": "Motilal Oswal", "linkedin_slug": "motilal-oswal-financial-services-ltd", "size_tier": "500-1000", "employee_count": 970, "industry": "Financial Services"},
+    {"name": "Nuvama Wealth", "linkedin_slug": "nuvama-wealth", "size_tier": "500-1000", "employee_count": 860, "industry": "Wealth Management"},
 
     # Tier 3: 1000+ employees (Increasing order)
     {"name": "PharmEasy", "linkedin_slug": "pharmeasy", "size_tier": "1000+", "employee_count": 1500, "industry": "HealthTech"},
+    {"name": "BillDesk", "linkedin_slug": "billdesk", "size_tier": "1000+", "employee_count": 1800, "industry": "Payments Fintech"},
     {"name": "Zepto", "linkedin_slug": "zeptonow", "size_tier": "1000+", "employee_count": 2200, "industry": "Quick Commerce"},
     {"name": "Nykaa", "linkedin_slug": "nykaa-com", "size_tier": "1000+", "employee_count": 3000, "industry": "E-Commerce"},
     {"name": "Angel One", "linkedin_slug": "angel-one-limited", "size_tier": "1000+", "employee_count": 3500, "industry": "Fintech"},
     {"name": "Pine Labs", "linkedin_slug": "pine-labs", "size_tier": "1000+", "employee_count": 3800, "industry": "Merchant Payments"},
     {"name": "Fractal Analytics", "linkedin_slug": "fractal-analytics", "size_tier": "1000+", "employee_count": 4500, "industry": "AI & Analytics"},
     {"name": "CRISIL", "linkedin_slug": "crisil", "size_tier": "1000+", "employee_count": 4800, "industry": "Financial Ratings & Analytics"},
-    {"name": "BillDesk", "linkedin_slug": "billdesk", "size_tier": "1000+", "employee_count": 1800, "industry": "Payments Fintech"},
+    {"name": "eClerx", "linkedin_slug": "eclerx", "size_tier": "1000+", "employee_count": 6500, "industry": "Data Analytics & Operations"},
     {"name": "CitiusTech", "linkedin_slug": "citiustech", "size_tier": "1000+", "employee_count": 7500, "industry": "Healthcare Tech"},
-    {"name": "Synechron", "linkedin_slug": "synechron", "size_tier": "1000+", "employee_count": 14000, "industry": "FinTech Consulting"},
     {"name": "Morningstar", "linkedin_slug": "morningstar", "size_tier": "1000+", "employee_count": 10000, "industry": "Investment Research"},
-    {"name": "IDFC FIRST Bank", "linkedin_slug": "idfcfirstbank", "size_tier": "1000+", "employee_count": 35000, "industry": "Banking"},
-    {"name": "Kotak Mahindra Bank", "linkedin_slug": "kotak-mahindra-bank", "size_tier": "1000+", "employee_count": 75000, "industry": "Banking & Finance"},
-    {"name": "HDFC Bank", "linkedin_slug": "hdfc-bank", "size_tier": "1000+", "employee_count": 170000, "industry": "Banking"},
-    {"name": "ICICI Bank", "linkedin_slug": "icici-bank", "size_tier": "1000+", "employee_count": 130000, "industry": "Banking"},
-    {"name": "JPMorgan Chase & Co.", "linkedin_slug": "jpmorganchase", "size_tier": "1000+", "employee_count": 250000, "industry": "Global Banking & Fintech"},
-    {"name": "Morgan Stanley", "linkedin_slug": "morgan-stanley", "size_tier": "1000+", "employee_count": 80000, "industry": "Investment Banking"},
-    {"name": "Goldman Sachs", "linkedin_slug": "goldman-sachs", "size_tier": "1000+", "employee_count": 45000, "industry": "Investment Banking"},
+    {"name": "Synechron", "linkedin_slug": "synechron", "size_tier": "1000+", "employee_count": 14000, "industry": "FinTech Consulting"},
     {"name": "Nomura", "linkedin_slug": "nomura", "size_tier": "1000+", "employee_count": 26000, "industry": "Investment Banking"},
     {"name": "PwC India", "linkedin_slug": "pwc-india", "size_tier": "1000+", "employee_count": 30000, "industry": "Consulting"},
+    {"name": "IDFC FIRST Bank", "linkedin_slug": "idfcfirstbank", "size_tier": "1000+", "employee_count": 35000, "industry": "Banking"},
+    {"name": "Goldman Sachs", "linkedin_slug": "goldman-sachs", "size_tier": "1000+", "employee_count": 45000, "industry": "Investment Banking"},
     {"name": "EY India", "linkedin_slug": "ernstandyoung", "size_tier": "1000+", "employee_count": 70000, "industry": "Consulting & Analytics"},
+    {"name": "Kotak Mahindra Bank", "linkedin_slug": "kotak-mahindra-bank", "size_tier": "1000+", "employee_count": 75000, "industry": "Banking & Finance"},
+    {"name": "Morgan Stanley", "linkedin_slug": "morgan-stanley", "size_tier": "1000+", "employee_count": 80000, "industry": "Investment Banking"},
     {"name": "Deloitte India", "linkedin_slug": "deloitte", "size_tier": "1000+", "employee_count": 90000, "industry": "Consulting & Analytics"},
+    {"name": "ICICI Bank", "linkedin_slug": "icici-bank", "size_tier": "1000+", "employee_count": 130000, "industry": "Banking"},
+    {"name": "HDFC Bank", "linkedin_slug": "hdfc-bank", "size_tier": "1000+", "employee_count": 170000, "industry": "Banking"},
+    {"name": "JPMorgan Chase & Co.", "linkedin_slug": "jpmorganchase", "size_tier": "1000+", "employee_count": 250000, "industry": "Global Banking & Fintech"},
 ]
+
+
+EXCLUDED_INDUSTRY_TERMS = [
+    "manufacturing", "chemical", "pharmaceutical", "medical equipment", "machinery",
+    "real estate", "construction", "civil engineering", "oil and gas", "mining",
+    "dairy", "farming", "agriculture", "fishery", "textile", "apparel & fashion manufacturing",
+    "freight", "package transportation", "maritime", "airlines", "aviation",
+    "hospitals", "health and human services", "civic and social", "non-profit", "nonprofit",
+    "staffing and recruiting", "human resources services", "security and investigations",
+    "food and beverage services", "restaurants", "hospitality", "architecture",
+    "law practice", "legal services", "printing", "plastics", "metals", "utilities",
+    "paper", "packaging", "motor vehicle", "automotive", "shipbuilding", "defence",
+]
+
+
+def _is_relevant_industry(industry: str, name: str = "") -> bool:
+    """Rejects irrelevant traditional industries (Manufacturing, Real Estate, Chemicals, Pharma Mfg, Dairy, etc.)."""
+    low_ind = (industry or "").lower()
+    low_name = (name or "").lower()
+    if not low_ind or low_ind == "hiring in mumbai":
+        return False
+    for bad in EXCLUDED_INDUSTRY_TERMS:
+        if bad in low_ind:
+            return False
+    # Also exclude staffing/realty/pharma/chemicals by company name cues when generic
+    if any(w in low_name for w in ["realty", "chemours", "cockerill", "lactalis", "pharma", "construction", "logistics ltd", "shipping"]):
+        return False
+    return True
 
 
 def _make_slug(name: str) -> str:
@@ -364,12 +492,22 @@ class MumbaiOutreachEngine:
             if log_cb:
                 log_cb(msg)
 
-        existing = self.get_companies()
+        raw_existing = self.get_companies()
+        # Filter out previously stored irrelevant industries and un-enriched fallback placeholders
+        existing = [
+            c for c in raw_existing
+            if _is_relevant_industry(c.get("industry", ""), c.get("name", ""))
+            and c.get("size_tier") in ("250-500", "500-1000", "1000+")
+        ]
+        removed_irrelevant = len(raw_existing) - len(existing)
+        if removed_irrelevant > 0:
+            log(f"Cleaned {removed_irrelevant} irrelevant/unverified companies from directory.")
+
         by_slug = {c.get("linkedin_slug"): c for c in existing if c.get("linkedin_slug")}
         by_name = {c.get("name", "").lower(): c for c in existing}
         added_count = 0
 
-        # Step A: Merge Curated Directory (60+ verified Mumbai firms)
+        # Step A: Merge Curated Directory (105+ 250-500, 30+ 500-1000, 23+ 1000+ relevant Mumbai firms)
         for seed in CURATED_MUMBAI_COMPANIES:
             slug = seed["linkedin_slug"]
             if slug not in by_slug and seed["name"].lower() not in by_name:
@@ -386,13 +524,14 @@ class MumbaiOutreachEngine:
                 ("Analyst", "Mumbai"),
                 ("Product Manager", "Mumbai"),
                 ("Business Analyst", "Mumbai"),
+                ("Product Analyst", "Mumbai"),
                 ("Strategy", "Mumbai"),
                 ("Data Analyst", "Mumbai"),
                 ("Human Resources", "Mumbai"),
                 ("Talent Acquisition", "Mumbai"),
                 ("Founder's Office", "Mumbai"),
-                ("Finance", "Mumbai"),
-                ("Software", "Mumbai"),
+                ("Fintech", "Mumbai"),
+                ("SaaS", "Mumbai"),
                 ("Analyst", "Navi Mumbai"),
                 ("Product", "Thane"),
             ]
@@ -423,22 +562,28 @@ class MumbaiOutreachEngine:
                     except Exception:
                         time.sleep(1.5)
 
-            log(f"Public Mumbai search uncovered {len(discovered_guest)} companies. Enriching company sizes & HQ...")
+            log(f"Public Mumbai search uncovered {len(discovered_guest)} hiring companies. Verifying headcount & industry relevance...")
 
             enriched_so_far = 0
             for slug, comp_name in discovered_guest.items():
                 if slug in by_slug or comp_name.lower() in by_name:
                     continue
-                if enriched_so_far < enrich_limit:
-                    meta = _fetch_public_company_metadata(slug)
-                    enriched_so_far += 1
-                    time.sleep(0.35)
-                else:
-                    meta = {}
+                if enriched_so_far >= enrich_limit:
+                    break
+                meta = _fetch_public_company_metadata(slug)
+                enriched_so_far += 1
+                time.sleep(0.45)
 
-                size_tier = meta.get("size_tier", "500-1000")
-                est_cnt = meta.get("employee_count", 600)
-                industry = meta.get("industry", "Hiring in Mumbai")
+                if not meta or not meta.get("size_text"):
+                    continue
+                size_tier = meta.get("size_tier", "<250")
+                if size_tier not in ("250-500", "500-1000", "1000+"):
+                    continue
+                industry = meta.get("industry", "")
+                if not _is_relevant_industry(industry, comp_name):
+                    continue
+
+                est_cnt = meta.get("employee_count", 350)
                 hq = meta.get("headquarters") or "Mumbai Office"
 
                 obj = self._build_company_obj(
@@ -467,7 +612,7 @@ class MumbaiOutreachEngine:
                 context, page = self.browser_mgr.get_context_and_page(force_headless=True)
                 if self.browser_mgr.ensure_logged_in(page, timeout_sec=8):
                     for tier_label, size_code, default_cnt in tier_queries:
-                        for pg in range(1, 4):  # Paginate pages 1..3
+                        for pg in range(1, 6):  # Paginate pages 1..5
                             url = (
                                 f"https://www.linkedin.com/search/results/companies/"
                                 f"?companyHqGeo=%5B%22106164952%22%5D&companySize=%5B%22{size_code}%22%5D"
@@ -475,6 +620,9 @@ class MumbaiOutreachEngine:
                             )
                             page.goto(url, wait_until="domcontentloaded")
                             human_delay(2.5, 3.5)
+                            if "uas/login" in page.url or "checkpoint" in page.url:
+                                log("⚠️ LinkedIn li_at cookie expired/challenged during logged-in company search; update li_at for live search.")
+                                break
 
                             discovered = page.evaluate('''() => {
                                 const items = [];
@@ -500,13 +648,16 @@ class MumbaiOutreachEngine:
                                 break
                             for d in discovered:
                                 slug = d["slug"].lower()
+                                ind = d.get("subtitle") or "Tech / Consulting"
+                                if not _is_relevant_industry(ind, d["name"]):
+                                    continue
                                 if slug not in by_slug and d["name"].lower() not in by_name:
                                     obj = self._build_company_obj(
                                         name=d["name"],
                                         linkedin_slug=slug,
                                         size_tier=tier_label,
                                         employee_count=default_cnt,
-                                        industry=d.get("subtitle") or "Mumbai Enterprise",
+                                        industry=ind,
                                         city="Mumbai",
                                     )
                                     existing.append(obj)
@@ -515,7 +666,7 @@ class MumbaiOutreachEngine:
                                     added_count += 1
                             log(f"Logged-in search page {pg} ({tier_label}): +{len(discovered)} checked.")
                 else:
-                    log("LinkedIn cookie expired for logged-in search — update li_at for extra private search results.")
+                    log("LinkedIn cookie not active for logged-in search — update li_at for extra private search results.")
             except Exception as e:
                 logger.debug(f"Logged-in search skipped: {e}")
             finally:

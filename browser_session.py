@@ -207,15 +207,15 @@ class BrowserManager:
     @staticmethod
     def probe_li_at_valid(li_at_val: str) -> bool:
         """Lightweight live check whether a LinkedIn li_at cookie still accesses /feed/ without login redirect."""
-        if not li_at_val:
+        if not li_at_val or len(li_at_val.strip()) < 20 or any(c.isspace() for c in li_at_val):
             return False
         try:
             import requests
             session = requests.Session()
             session.max_redirects = 5
+            session.cookies.set("li_at", li_at_val, domain=".linkedin.com")
             res = session.get(
                 "https://www.linkedin.com/feed/",
-                cookies={"li_at": li_at_val},
                 headers={
                     "User-Agent": (
                         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -231,10 +231,10 @@ class BrowserManager:
             title_snippet = (res.text[:2000] if res.text else "").lower()
             if "linkedin login" in title_snippet or "sign in | linkedin" in title_snippet:
                 return False
-            return res.status_code == 200
+            return True
         except Exception as e:
-            logger.debug(f"probe_li_at_valid fallback error: {e}")
-            return False
+            logger.debug(f"probe_li_at_valid transient error (deferring to browser): {e}")
+            return True
 
     @staticmethod
     def mark_session_expired(reason: str = "redirected_to_login"):

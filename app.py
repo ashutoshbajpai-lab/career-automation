@@ -4065,18 +4065,22 @@ def autonomous_10h_scheduler():
         "scan_replies": 0
     }
 
-    def scheduled_job(task_name):
+    def scheduled_job(task_name) -> bool:
         now_ist = datetime.now(IST)
         if not (9 <= now_ist.hour < 19):
             logger.info(f"Outside 10-hour IST window ({now_ist.strftime('%H:%M')} IST). Skipping scheduled '{task_name}'.")
-            return
+            return False
         if CURRENT_TASK["running"]:
-            add_log(f"⏸️ [SCHEDULER] '{task_name}' deferred: Task '{CURRENT_TASK['name']}' is currently running.")
-            return
+            return False
+        # Claim lock synchronously before spawning thread to prevent race conditions across milestones
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = task_name
+        CURRENT_TASK["started_at"] = now_ist.strftime("%H:%M:%S")
         add_log(f"⏰ [10h SHIFT SCHEDULER] Triggering '{task_name}' at {now_ist.strftime('%H:%M:%S')} IST")
         last_periodic_runs[task_name] = time.time()
         t = threading.Thread(target=execute_task, args=(task_name,), daemon=True)
         t.start()
+        return True
 
     while True:
         try:
@@ -4086,49 +4090,43 @@ def autonomous_10h_scheduler():
             current_min = now_ist.minute
             now_ts = time.time()
 
-            if 9 <= current_hour < 19:
+            if 9 <= current_hour < 19 and not CURRENT_TASK["running"]:
                 completed = load_milestones()
 
-                # Milestone 1: 09:00 AM Daily Naukri Recency Boost
                 boost_key = f"{today_str}_naukri_boost"
-                if boost_key not in completed and current_hour >= 9:
-                    record_milestone(boost_key)
-                    scheduled_job("naukri_boost")
-
-                # Milestone 2: 09:30 AM Daily Naukri Mass Apply Morning Run
                 apply_am_key = f"{today_str}_naukri_apply_am"
-                if apply_am_key not in completed and (current_hour > 9 or (current_hour == 9 and current_min >= 30)):
-                    record_milestone(apply_am_key)
-                    scheduled_job("naukri_apply")
-
-                # Milestone 3: 03:30 PM Daily Naukri Mass Apply Afternoon Run
                 apply_pm_key = f"{today_str}_naukri_apply_pm"
-                if apply_pm_key not in completed and (current_hour > 15 or (current_hour == 15 and current_min >= 30)):
-                    record_milestone(apply_pm_key)
-                    scheduled_job("naukri_apply")
-
-                # Milestone 3B: 11:00 AM Daily 2-Day Mumbai Follow-Up Acceptance Check
                 mumbai_2d_key = f"{today_str}_mumbai_followup_2d"
-                if mumbai_2d_key not in completed and current_hour >= 11:
-                    record_milestone(mumbai_2d_key)
-                    scheduled_job("mumbai_followup")
-
-                # Milestone 4: 06:45 PM Evening Gmail Sweep
                 gmail_pm_key = f"{today_str}_gmail_pm"
-                if gmail_pm_key not in completed and (current_hour > 18 or (current_hour == 18 and current_min >= 45)):
-                    record_milestone(gmail_pm_key)
-                    scheduled_job("scan_gmail")
 
-                # Periodic Tasks (Catch-up on server wake or recurring interval):
-                # Feed Harvest: Every 45 minutes
-                if (now_ts - last_periodic_runs["linkedin_feed"]) > (45 * 60):
+                # Strict priority order: Daily Naukri milestones first, only recorded if actually launched!
+                if boost_key not in completed and current_hour >= 9:
+                    if scheduled_job("naukri_boost"):
+                        record_milestone(boost_key)
+
+                elif apply_am_key not in completed and (current_hour > 9 or (current_hour == 9 and current_min >= 30)):
+                    if scheduled_job("naukri_apply"):
+                        record_milestone(apply_am_key)
+
+                elif apply_pm_key not in completed and (current_hour > 15 or (current_hour == 15 and current_min >= 30)):
+                    if scheduled_job("naukri_apply"):
+                        record_milestone(apply_pm_key)
+
+                elif mumbai_2d_key not in completed and current_hour >= 11:
+                    if scheduled_job("mumbai_followup"):
+                        record_milestone(mumbai_2d_key)
+
+                elif gmail_pm_key not in completed and (current_hour > 18 or (current_hour == 18 and current_min >= 45)):
+                    if scheduled_job("scan_gmail"):
+                        record_milestone(gmail_pm_key)
+
+                # Periodic Tasks only run once daily milestones due right now are caught up:
+                elif (now_ts - last_periodic_runs["linkedin_feed"]) > (45 * 60):
                     scheduled_job("linkedin_feed")
 
-                # Gmail Intel: Every 30 minutes
                 elif (now_ts - last_periodic_runs["scan_gmail"]) > (30 * 60):
                     scheduled_job("scan_gmail")
 
-                # LinkedIn Replies / Resumes: Every 40 minutes
                 elif (now_ts - last_periodic_runs["scan_replies"]) > (40 * 60):
                     scheduled_job("scan_replies")
 

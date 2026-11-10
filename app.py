@@ -1349,10 +1349,10 @@ MERAKI_UI_HTML = """
             <h3 class="text-2xl font-bold text-amber-600 mt-1" id="mumbaiPecCount">0</h3>
           </div>
           <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-            <p class="text-[11px] font-semibold text-slate-400 uppercase">Incomplete (Pending)</p>
+            <p class="text-[11px] font-semibold text-slate-400 uppercase">Incomplete / Sending List</p>
             <div class="flex items-baseline gap-2 mt-1">
               <h3 class="text-2xl font-bold text-rose-600" id="mumbaiIncompleteCount">0</h3>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700"><span id="mumbaiDue2DayCount">0</span> due 2d+</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700"><span id="mumbaiSendingListCount">0</span> ready to send</span>
             </div>
           </div>
           <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
@@ -1488,13 +1488,9 @@ MERAKI_UI_HTML = """
                 <span>Maximize Connects &amp; Message Connected</span>
               </button>
               <button onclick="runMumbai2DayFollowup()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-amber-600/20 cursor-pointer">
-                <i class="fa-solid fa-clock-rotate-left"></i>
-                <span>Run 2-Day Acceptance Check &amp; Send</span>
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Daily Check Accepted → Sending List &amp; Message</span>
               </button>
-              <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 ml-1 cursor-pointer">
-                <input type="checkbox" id="mumbaiCheckAllPending" class="rounded text-amber-600">
-                <span>Check All Pending (&lt;2d too)</span>
-              </label>
             </div>
           </div>
         </div>
@@ -1507,6 +1503,9 @@ MERAKI_UI_HTML = """
             </button>
             <button onclick="switchMumbaiSubTab('other')" id="mSubTab-other" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
               Other Target Contacts (<span id="mTabOtherCount">0</span>)
+            </button>
+            <button onclick="switchMumbaiSubTab('sending')" id="mSubTab-sending" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
+              Sending List (Accepted &amp; Ready) (<span id="mTabSendingCount">0</span>)
             </button>
             <button onclick="switchMumbaiSubTab('incomplete')" id="mSubTab-incomplete" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer">
               Incomplete / Pending Accept (<span id="mTabIncompleteCount">0</span>)
@@ -2824,11 +2823,12 @@ MERAKI_UI_HTML = """
         if (document.getElementById('mumbaiTodayMessages')) document.getElementById('mumbaiTodayMessages').innerText = d.today_stats?.messages_sent ?? 0;
         if (document.getElementById('mumbaiPecCount')) document.getElementById('mumbaiPecCount').innerText = d.counts?.pec ?? 0;
         if (document.getElementById('mumbaiIncompleteCount')) document.getElementById('mumbaiIncompleteCount').innerText = d.counts?.incomplete ?? 0;
-        if (document.getElementById('mumbaiDue2DayCount')) document.getElementById('mumbaiDue2DayCount').innerText = d.counts?.due_2day ?? 0;
+        if (document.getElementById('mumbaiSendingListCount')) document.getElementById('mumbaiSendingListCount').innerText = d.counts?.sending_list ?? 0;
         if (document.getElementById('mumbaiCompletedCount')) document.getElementById('mumbaiCompletedCount').innerText = d.counts?.completed ?? 0;
 
         if (document.getElementById('mTabPecCount')) document.getElementById('mTabPecCount').innerText = d.counts?.pec ?? 0;
         if (document.getElementById('mTabOtherCount')) document.getElementById('mTabOtherCount').innerText = d.counts?.other ?? 0;
+        if (document.getElementById('mTabSendingCount')) document.getElementById('mTabSendingCount').innerText = d.counts?.sending_list ?? 0;
         if (document.getElementById('mTabIncompleteCount')) document.getElementById('mTabIncompleteCount').innerText = d.counts?.incomplete ?? 0;
         if (document.getElementById('mTabCompletedCount')) document.getElementById('mTabCompletedCount').innerText = d.counts?.completed ?? 0;
 
@@ -3035,15 +3035,14 @@ MERAKI_UI_HTML = """
     }
 
     async function runMumbai2DayFollowup() {
-      const checkAll = document.getElementById('mumbaiCheckAllPending')?.checked || false;
       try {
         const res = await fetch('/api/mumbai/followup/check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ min_age_days: 2, check_all_pending: checkAll })
+          body: JSON.stringify({ min_age_days: 0, check_all_pending: true })
         });
         const d = await res.json();
-        alert(d.message || '2-Day acceptance verification started in background!');
+        alert(d.message || 'Daily acceptance check (ALL pending contacts) & Sending List dispatch started in background!');
         switchTab('terminal');
       } catch (e) { alert('Error: ' + e); }
     }
@@ -3053,11 +3052,12 @@ MERAKI_UI_HTML = """
       const styles = {
         pec: 'bg-amber-600 text-white',
         other: 'bg-sky-600 text-white',
+        sending: 'bg-indigo-600 text-white',
         incomplete: 'bg-rose-600 text-white',
         completed: 'bg-teal-600 text-white',
         daily: 'bg-indigo-600 text-white'
       };
-      ['pec', 'other', 'incomplete', 'completed', 'daily'].forEach(k => {
+      ['pec', 'other', 'sending', 'incomplete', 'completed', 'daily'].forEach(k => {
         const btn = document.getElementById(`mSubTab-${k}`);
         if (btn) {
           btn.className = k === sub
@@ -3099,6 +3099,7 @@ MERAKI_UI_HTML = """
       let rows = [];
       if (currentMumbaiSubTab === 'pec') rows = mumbaiWorkspaceData.pec_contacts || [];
       else if (currentMumbaiSubTab === 'other') rows = mumbaiWorkspaceData.other_contacts || [];
+      else if (currentMumbaiSubTab === 'sending') rows = mumbaiWorkspaceData.sending_list || [];
       else if (currentMumbaiSubTab === 'incomplete') rows = mumbaiWorkspaceData.incomplete || [];
       else if (currentMumbaiSubTab === 'completed') rows = mumbaiWorkspaceData.completed || [];
 
@@ -3115,8 +3116,9 @@ MERAKI_UI_HTML = """
         let stageBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Discovered</span>';
         if (c.workflow_stage === 'incomplete_pending_accept') {
           const days = c.days_pending ?? 0;
-          const dueBadge = c.due_for_2day_check ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-bold">2d+ DUE</span>' : '';
-          stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Incomplete (Day ${days})</span>${dueBadge}<div class="text-[10px] text-slate-400 mt-0.5">Sent: ${c.connection_sent_at || '--'}</div>`;
+          stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">Incomplete (Day ${days})</span><div class="text-[10px] text-slate-400 mt-0.5">Sent: ${c.connection_sent_at || '--'}</div>`;
+        } else if (c.workflow_stage === 'sending_list') {
+          stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">Sending List (Accepted ✓)</span><div class="text-[10px] text-slate-400 mt-0.5">Accepted: ${c.accepted_at || '--'}</div>`;
         } else if (c.workflow_stage === 'completed') {
           stageBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">Completed ✓</span><div class="text-[10px] text-slate-400 mt-0.5">Msg: ${c.messaged_at || '--'}</div>`;
         }
@@ -3722,30 +3724,31 @@ def mumbai_followup_check_route():
         return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
 
     data = request.json or {}
-    min_age_days = int(data.get("min_age_days", 2))
-    check_all_pending = bool(data.get("check_all_pending", False))
+    min_age_days = int(data.get("min_age_days", 0))
+    check_all_pending = bool(data.get("check_all_pending", True))
 
     def _run():
         global CURRENT_TASK
         CURRENT_TASK["running"] = True
-        CURRENT_TASK["name"] = "Mumbai 2-Day Acceptance Follow-Up"
+        CURRENT_TASK["name"] = "Daily Acceptance Check & Send"
         CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
         try:
             engine = MumbaiOutreachEngine()
-            engine.run_2day_followup_check(
+            engine.run_daily_acceptance_and_send(
                 min_age_days=min_age_days,
                 check_all_pending=check_all_pending,
+                send_immediately=True,
                 log_cb=add_log
             )
         except Exception as e:
-            add_log(f"ERROR in 2-day follow-up check: {e}")
+            add_log(f"ERROR in daily acceptance follow-up check: {e}")
         finally:
             CURRENT_TASK["running"] = False
             CURRENT_TASK["name"] = "Idle"
             CURRENT_TASK["started_at"] = None
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"success": True, "message": "Started 2-Day Acceptance Follow-Up Check in background!"})
+    return jsonify({"success": True, "message": "Started Daily Check for all accepted connections -> Sending List & Message!"})
 
 
 def load_json_file(filepath: str, default: dict) -> dict:

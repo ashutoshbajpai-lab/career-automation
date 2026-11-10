@@ -231,6 +231,7 @@ EXCLUDED_INDUSTRY_TERMS = [
     "food and beverage services", "restaurants", "hospitality", "architecture",
     "law practice", "legal services", "printing", "plastics", "metals", "utilities",
     "paper", "packaging", "motor vehicle", "automotive", "shipbuilding", "defence",
+    "appliances", "consumer cooling", "furniture", "events services", "biotechnology research",
 ]
 
 

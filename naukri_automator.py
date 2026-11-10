@@ -257,7 +257,12 @@ class NaukriAutomator:
         External company site / Workday / Oracle / MNC redirects are logged to the manual queue.
         """
         if not target_roles:
-            target_roles = ["Analyst", "Data Analyst", "Business Analyst", "Associate Product Manager", "Product Manager"]
+            target_roles = [
+                "Analyst", "Data Analyst", "Business Analyst", "Product Analyst",
+                "Associate Product Manager", "Product Manager", "Strategy Analyst",
+                "Research Analyst", "Financial Analyst", "Operations Analyst",
+                "Associate Analyst", "Management Trainee", "Growth Analyst"
+            ]
 
         logger.info(f"Starting Naukri High-Volume Auto-Apply (Target: {daily_target} applications)...")
         headed_mode = False if os.environ.get("DISPLAY") else None

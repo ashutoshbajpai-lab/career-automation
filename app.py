@@ -1383,10 +1383,12 @@ MERAKI_UI_HTML = """
           <!-- Quick Add Custom Company + Size Filter Bar -->
           <div class="flex flex-wrap items-center justify-between gap-3 pt-1 pb-2 border-b border-slate-100">
             <div class="flex items-center gap-1.5 flex-wrap">
-              <button onclick="filterMumbaiSize('all')" id="btnMSizeAll" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">All Sizes (Sorted)</button>
-              <button onclick="filterMumbaiSize('250-500')" id="btnMSize250" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">250-500 (Start Here)</button>
-              <button onclick="filterMumbaiSize('500-1000')" id="btnMSize500" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">500-1000</button>
-              <button onclick="filterMumbaiSize('1000+')" id="btnMSize1000" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">1000+ Employees</button>
+              <button onclick="filterMumbaiSize('all')" id="btnMSizeAll" class="px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">All Sizes (<span id="mCntAll">0</span>)</button>
+              <button onclick="filterMumbaiSize('250-500')" id="btnMSize250" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">250-500 (<span id="mCnt250">0</span>)</button>
+              <button onclick="filterMumbaiSize('500-1000')" id="btnMSize500" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">500-1000 (<span id="mCnt500">0</span>)</button>
+              <button onclick="filterMumbaiSize('1000+')" id="btnMSize1000" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">1000+ (<span id="mCnt1000">0</span>)</button>
+              <input type="text" id="mumbaiCompanySearch" oninput="renderMumbaiCompanies()" placeholder="Search company or industry..."
+                     class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 ml-1">
             </div>
             <div class="flex items-center gap-2">
               <input type="text" id="customMumbaiCompanyName" placeholder="Add company (e.g. JP Morgan)" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
@@ -2853,9 +2855,22 @@ MERAKI_UI_HTML = """
       const tbody = document.getElementById('mumbaiCompaniesTableBody');
       if (!tbody || !mumbaiWorkspaceData) return;
 
-      let list = mumbaiWorkspaceData.companies || [];
+      const allList = mumbaiWorkspaceData.companies || [];
+      const c250 = allList.filter(c => c.size_tier === '250-500').length;
+      const c500 = allList.filter(c => c.size_tier === '500-1000').length;
+      const c1000 = allList.filter(c => c.size_tier === '1000+').length;
+      if (document.getElementById('mCntAll')) document.getElementById('mCntAll').innerText = allList.length;
+      if (document.getElementById('mCnt250')) document.getElementById('mCnt250').innerText = c250;
+      if (document.getElementById('mCnt500')) document.getElementById('mCnt500').innerText = c500;
+      if (document.getElementById('mCnt1000')) document.getElementById('mCnt1000').innerText = c1000;
+
+      let list = allList;
       if (currentMumbaiSizeFilter !== 'all') {
         list = list.filter(c => c.size_tier === currentMumbaiSizeFilter);
+      }
+      const q = (document.getElementById('mumbaiCompanySearch')?.value || '').trim().toLowerCase();
+      if (q) {
+        list = list.filter(c => (c.name || '').toLowerCase().includes(q) || (c.industry || '').toLowerCase().includes(q));
       }
 
       if (!list.length) {

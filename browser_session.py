@@ -166,6 +166,13 @@ class BrowserManager:
                     logger.warning(f"Failed to decode SESSION_COOKIES_BASE64: {e}")
 
         if cookies:
+            # Remove any stale li_at cookies stored in chrome_profile (e.g. .www.linkedin.com)
+            # that would otherwise shadow the fresh .linkedin.com li_at from session_cookies.json.
+            if any(c.get("name") == "li_at" and c.get("value") for c in cookies):
+                try:
+                    self.context.clear_cookies(name="li_at")
+                except Exception:
+                    pass
             try:
                 self.context.add_cookies(cookies)
                 logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")
@@ -252,9 +259,9 @@ class BrowserManager:
         Verifies live validity when non-CDP cookies are used so stale cookies are caught immediately.
         """
         cookies = self.context.cookies(["https://www.linkedin.com"])
-        li_at_cookie = next((c for c in cookies if c["name"] == "li_at" and c.get("value")), None)
-        if li_at_cookie:
-            if not self.is_cdp and not self.probe_li_at_valid(li_at_cookie["value"]):
+        li_at_cookies = [c for c in cookies if c["name"] == "li_at" and c.get("value")]
+        if li_at_cookies:
+            if not self.is_cdp and not any(self.probe_li_at_valid(c["value"]) for c in li_at_cookies):
                 logger.warning("Saved li_at cookie failed live /feed/ check (expired/revoked).")
                 self.mark_session_expired("live_feed_check_failed")
                 return False

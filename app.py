@@ -396,8 +396,8 @@ MERAKI_UI_HTML = """
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
     <!-- Top Navbar with Direct Trigger Controls -->
-    <header class="bg-white border-b border-slate-200/80 px-8 py-3.5 flex items-center justify-between z-10 flex-shrink-0">
-      <div>
+    <header class="bg-white border-b border-slate-200/80 px-6 py-3 flex flex-wrap items-center justify-between gap-3 z-10 flex-shrink-0">
+      <div class="min-w-0">
         <nav class="text-xs text-slate-400 font-medium flex items-center space-x-1.5">
           <span>Pages</span>
           <span>/</span>
@@ -407,7 +407,7 @@ MERAKI_UI_HTML = """
       </div>
 
       <!-- Quick Manual Triggers Row -->
-      <div class="flex items-center space-x-2">
+      <div class="flex flex-wrap items-center gap-2">
         <!-- MASTER 1-CLICK AUTOPILOT BUTTON -->
         <button onclick="triggerMasterRunAll()" title="Single Button: Naukri Update & 50+ Apply, LinkedIn Easy Apply, Feed Harvester, and Mumbai Startups Connection Requests (No Note)"
                 class="bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30 animate-pulse hover:animate-none cursor-pointer">
@@ -1380,6 +1380,18 @@ MERAKI_UI_HTML = """
             </div>
           </div>
 
+          <!-- Prominent Full-Width Search Among Companies Bar -->
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 text-xs"></i>
+            <input type="text" id="mumbaiCompanySearch" oninput="renderMumbaiCompanies()"
+                   placeholder="Search among all Mumbai companies by name, industry, or LinkedIn slug (e.g. GrayQuest, JPMorgan, FinTech)..."
+                   class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-24 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+            <button onclick="document.getElementById('mumbaiCompanySearch').value=''; renderMumbaiCompanies();" type="button"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 hover:text-slate-700 px-2 py-0.5 rounded bg-slate-100 cursor-pointer">
+              Clear
+            </button>
+          </div>
+
           <!-- Quick Add Custom Company + Size Filter Bar -->
           <div class="flex flex-wrap items-center justify-between gap-3 pt-1 pb-2 border-b border-slate-100">
             <div class="flex items-center gap-1.5 flex-wrap">
@@ -1387,8 +1399,6 @@ MERAKI_UI_HTML = """
               <button onclick="filterMumbaiSize('250-500')" id="btnMSize250" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">250-500 (<span id="mCnt250">0</span>)</button>
               <button onclick="filterMumbaiSize('500-1000')" id="btnMSize500" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">500-1000 (<span id="mCnt500">0</span>)</button>
               <button onclick="filterMumbaiSize('1000+')" id="btnMSize1000" class="px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">1000+ (<span id="mCnt1000">0</span>)</button>
-              <input type="text" id="mumbaiCompanySearch" oninput="renderMumbaiCompanies()" placeholder="Search company or industry..."
-                     class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 text-xs text-slate-800 focus:outline-none focus:border-indigo-500 ml-1">
             </div>
             <div class="flex items-center gap-2">
               <input type="text" id="customMumbaiCompanyName" placeholder="Add company (e.g. JP Morgan)" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
@@ -1462,36 +1472,40 @@ MERAKI_UI_HTML = """
           </div>
         </div>
 
-        <!-- Step 2: Workflow Controls (Extract Keywords -> Maximize Connects -> 2-Day Check) -->
+        <!-- Step 2: Workflow Controls (Extract 30+ Contacts -> Maximize Connects Only -> Daily Check -> Send Messages) -->
         <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
           <div class="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
                 <i class="fa-solid fa-gears text-teal-600"></i>
-                <span>Step 2: Contact Keyword Discovery, Connection Maximization &amp; 2-Day Follow-Up</span>
+                <span>Step 2: Find 30+ Contacts/Company, Maximize Connection Requests &amp; Separate Messaging</span>
               </h3>
-              <p class="text-xs text-slate-400">Extracts LinkedIn contacts by keywords, segregates <strong>PEC Chandigarh</strong> vs <strong>Other</strong>, maximizes clean connection invites (250-500 → 500-1000 → 1000+), and follows up after 2 days.</p>
+              <p class="text-xs text-slate-400">Extracts <strong>30+ contacts minimum</strong> per company, segregates <strong>PEC Chandigarh</strong> vs <strong>Other</strong>, maximizes <strong>Connection Requests Only (No Messages)</strong>, and holds accepted contacts in <strong>Sending List</strong> until you fix templates and click <strong>Send Messages</strong>.</p>
             </div>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
-            <div class="lg:col-span-5">
+            <div class="lg:col-span-4">
               <label class="block text-xs font-semibold text-slate-600 mb-1">Target Role / Department Keywords (comma-separated)</label>
               <input type="text" id="mumbaiKeywordsInput" value="Founder's Office, HR, Talent, Product, Analyst"
                      class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500">
             </div>
-            <div class="lg:col-span-7 flex flex-wrap items-center gap-2">
-              <button onclick="generateMumbaiContacts()" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-teal-600/20 cursor-pointer">
+            <div class="lg:col-span-8 flex flex-wrap items-center gap-2">
+              <button onclick="generateMumbaiContacts()" class="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-teal-600/20 cursor-pointer">
                 <i class="fa-solid fa-magnifying-glass-plus"></i>
-                <span>Find &amp; Segregate Contacts</span>
+                <span>Find 30+ Contacts &amp; Store List</span>
               </button>
-              <button onclick="runMumbaiOutreachCycle()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer">
+              <button onclick="runMumbaiOutreachCycle()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer">
                 <i class="fa-solid fa-user-plus"></i>
-                <span>Maximize Connects &amp; Message Connected</span>
+                <span>Maximize Connection Requests Only</span>
               </button>
-              <button onclick="runMumbai2DayFollowup()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-amber-600/20 cursor-pointer">
+              <button onclick="runMumbai2DayFollowup()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-amber-600/20 cursor-pointer">
                 <i class="fa-solid fa-arrows-rotate"></i>
-                <span>Daily Check Accepted → Sending List &amp; Message</span>
+                <span>Daily Check Accepted → Sending List</span>
+              </button>
+              <button onclick="runMumbaiSendMessagesOnly()" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-purple-600/20 cursor-pointer">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Send Messages to Sending List</span>
               </button>
             </div>
           </div>
@@ -3027,10 +3041,16 @@ MERAKI_UI_HTML = """
         const res = await fetch('/api/mumbai/contacts/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_ids: companyIds, keywords: kw, max_companies: 3 })
+          body: JSON.stringify({
+            company_ids: companyIds,
+            keywords: kw,
+            max_companies: 5,
+            min_contacts_per_company: 30,
+            limit_per_company: 45
+          })
         });
         const d = await res.json();
-        alert(d.message || 'Contact discovery started in background! Watch Live Terminal.');
+        alert(d.message || '30+ contacts/company discovery started in background! Watch Live Terminal.');
         switchTab('terminal');
       } catch (e) { alert('Error: ' + e); }
     }
@@ -3041,10 +3061,15 @@ MERAKI_UI_HTML = """
         const res = await fetch('/api/mumbai/outreach/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ company_ids: companyIds, max_connects: 20, max_messages: 15 })
+          body: JSON.stringify({
+            company_ids: companyIds,
+            max_connects: 35,
+            max_messages: 0,
+            connect_only: true
+          })
         });
         const d = await res.json();
-        alert(d.message || 'Connection maximization & messaging started in background!');
+        alert(d.message || 'Connection Request Maximization (No Messages) started in background!');
         switchTab('terminal');
       } catch (e) { alert('Error: ' + e); }
     }
@@ -3054,10 +3079,25 @@ MERAKI_UI_HTML = """
         const res = await fetch('/api/mumbai/followup/check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ min_age_days: 0, check_all_pending: true })
+          body: JSON.stringify({ min_age_days: 0, check_all_pending: true, send_immediately: false })
         });
         const d = await res.json();
-        alert(d.message || 'Daily acceptance check (ALL pending contacts) & Sending List dispatch started in background!');
+        alert(d.message || 'Daily acceptance check started! Newly accepted contacts will move into Sending List (messages held until you click Send Messages).');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
+    async function runMumbaiSendMessagesOnly() {
+      const companyIds = _getSelectedMumbaiCompanyIds();
+      if (!confirm('Have you verified/customized your per-company PEC & Other templates? This will send messages ONLY to accepted contacts currently in your Sending List.')) return;
+      try {
+        const res = await fetch('/api/mumbai/messages/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_ids: companyIds, max_messages: 35 })
+        });
+        const d = await res.json();
+        alert(d.message || 'Sending List message dispatch started in background!');
         switchTab('terminal');
       } catch (e) { alert('Error: ' + e); }
     }
@@ -3671,12 +3711,14 @@ def mumbai_generate_contacts_route():
     company_ids = data.get("company_ids", [])
     raw_kw = data.get("keywords", "Founder's Office, HR, Talent, Product, Analyst")
     keywords = [k.strip() for k in raw_kw.split(",") if k.strip()] if isinstance(raw_kw, str) else raw_kw
-    max_companies = int(data.get("max_companies", 3))
+    max_companies = int(data.get("max_companies", 5))
+    min_contacts_per_company = int(data.get("min_contacts_per_company", 30))
+    limit_per_company = int(data.get("limit_per_company", 45))
 
     def _run():
         global CURRENT_TASK
         CURRENT_TASK["running"] = True
-        CURRENT_TASK["name"] = "Mumbai Contacts Keyword Extraction"
+        CURRENT_TASK["name"] = "Mumbai Contacts (30+/Co) Extraction"
         CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
         try:
             engine = MumbaiOutreachEngine()
@@ -3684,6 +3726,8 @@ def mumbai_generate_contacts_route():
                 company_ids=company_ids or None,
                 keywords=keywords,
                 max_companies=max_companies,
+                min_contacts_per_company=min_contacts_per_company,
+                limit_per_company=limit_per_company,
                 log_cb=add_log
             )
         except Exception as e:
@@ -3694,7 +3738,7 @@ def mumbai_generate_contacts_route():
             CURRENT_TASK["started_at"] = None
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"success": True, "message": "Started LinkedIn contact extraction & PEC/Other segregation in background!"})
+    return jsonify({"success": True, "message": "Started 30+ Contacts/Company LinkedIn discovery & PEC/Other segregation in background!"})
 
 
 @app.route("/api/mumbai/outreach/run", methods=["POST"])
@@ -3705,13 +3749,14 @@ def mumbai_run_outreach_route():
     data = request.json or {}
     company_ids = data.get("company_ids", [])
     contact_ids = data.get("contact_ids", [])
-    max_connects = int(data.get("max_connects", 20))
-    max_messages = int(data.get("max_messages", 15))
+    max_connects = int(data.get("max_connects", 35))
+    max_messages = int(data.get("max_messages", 0))
+    connect_only = bool(data.get("connect_only", True))
 
     def _run():
         global CURRENT_TASK
         CURRENT_TASK["running"] = True
-        CURRENT_TASK["name"] = "Mumbai Connect & Outreach Cycle"
+        CURRENT_TASK["name"] = "Mumbai Connection Maximization (No Msg)" if connect_only else "Mumbai Connect & Outreach Cycle"
         CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
         try:
             engine = MumbaiOutreachEngine()
@@ -3720,17 +3765,57 @@ def mumbai_run_outreach_route():
                 contact_ids=contact_ids or None,
                 max_connects=max_connects,
                 max_messages=max_messages,
+                connect_only=connect_only,
                 log_cb=add_log
             )
         except Exception as e:
-            add_log(f"ERROR in Mumbai connect & outreach cycle: {e}")
+            add_log(f"ERROR in Mumbai connect cycle: {e}")
         finally:
             CURRENT_TASK["running"] = False
             CURRENT_TASK["name"] = "Idle"
             CURRENT_TASK["started_at"] = None
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"success": True, "message": "Started Connection Maximization & 1st-Degree Messaging cycle in background!"})
+    msg = (
+        "Started Connection Request Maximization ONLY (no messages sent; 1st-degree contacts queued in Sending List)!"
+        if connect_only else
+        "Started Connection Maximization & 1st-Degree Messaging cycle in background!"
+    )
+    return jsonify({"success": True, "message": msg})
+
+
+@app.route("/api/mumbai/messages/send", methods=["POST"])
+def mumbai_send_messages_route():
+    if CURRENT_TASK["running"]:
+        return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
+
+    data = request.json or {}
+    company_ids = data.get("company_ids", [])
+    contact_ids = data.get("contact_ids", [])
+    max_messages = int(data.get("max_messages", 35))
+
+    def _run():
+        global CURRENT_TASK
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai Sending List Dispatch"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.run_send_messages_only(
+                company_ids=company_ids or None,
+                contact_ids=contact_ids or None,
+                max_messages=max_messages,
+                log_cb=add_log
+            )
+        except Exception as e:
+            add_log(f"ERROR sending Mumbai Sending List messages: {e}")
+        finally:
+            CURRENT_TASK["running"] = False
+            CURRENT_TASK["name"] = "Idle"
+            CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started sending customized PEC/Other messages to accepted contacts in Sending List!"})
 
 
 @app.route("/api/mumbai/followup/check", methods=["POST"])
@@ -3741,18 +3826,19 @@ def mumbai_followup_check_route():
     data = request.json or {}
     min_age_days = int(data.get("min_age_days", 0))
     check_all_pending = bool(data.get("check_all_pending", True))
+    send_immediately = bool(data.get("send_immediately", False))
 
     def _run():
         global CURRENT_TASK
         CURRENT_TASK["running"] = True
-        CURRENT_TASK["name"] = "Daily Acceptance Check & Send"
+        CURRENT_TASK["name"] = "Daily Acceptance Check → Sending List"
         CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
         try:
             engine = MumbaiOutreachEngine()
             engine.run_daily_acceptance_and_send(
                 min_age_days=min_age_days,
                 check_all_pending=check_all_pending,
-                send_immediately=True,
+                send_immediately=send_immediately,
                 log_cb=add_log
             )
         except Exception as e:
@@ -3763,7 +3849,12 @@ def mumbai_followup_check_route():
             CURRENT_TASK["started_at"] = None
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"success": True, "message": "Started Daily Check for all accepted connections -> Sending List & Message!"})
+    msg = (
+        "Started Daily Check: promoting all accepted connections into Sending List (messages held until you click Send Messages)!"
+        if not send_immediately else
+        "Started Daily Check for all accepted connections -> Sending List & Message!"
+    )
+    return jsonify({"success": True, "message": msg})
 
 
 def load_json_file(filepath: str, default: dict) -> dict:
@@ -4044,10 +4135,10 @@ def execute_task(task_type):
             add_log(f"SUCCESS: LinkedIn Inbox Scan finished. Dispatched resumes to {len(results)} contacts.")
 
         elif task_type == "mumbai_followup":
-            add_log("🏙️ Running Automated 2-Day Mumbai Connection Acceptance Check...")
+            add_log("🏙️ Running Daily Mumbai Connection Acceptance Check → Sending List...")
             meng = MumbaiOutreachEngine()
-            res = meng.run_2day_followup_check(min_age_days=2, check_all_pending=False, log_cb=add_log)
-            add_log(f"✅ Mumbai 2-Day Check finished: {res.get('accepted_and_messaged', 0)} accepted & messaged, {res.get('still_pending', 0)} still pending.")
+            res = meng.run_daily_acceptance_and_send(min_age_days=0, check_all_pending=True, send_immediately=False, log_cb=add_log)
+            add_log(f"✅ Mumbai Daily Check finished: {res.get('added_to_sending_list', 0)} promoted to Sending List, {res.get('still_pending', 0)} still pending.")
 
     except Exception as e:
         add_log(f"ERROR during {task_type}: {e}")

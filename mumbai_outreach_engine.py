@@ -685,22 +685,24 @@ class MumbaiOutreachEngine:
         }
 
     # ------------------------------------------------------------------
-    # Step 2: Generate Contacts with Keywords & Segregate (PEC vs Other)
+    # Step 2: Generate Contacts with Keywords (30+ minimum) & Segregate (PEC vs Other)
     # ------------------------------------------------------------------
     def generate_contacts_for_companies(
         self,
         company_ids: list = None,
         keywords: list = None,
-        max_companies: int = 3,
-        limit_per_company: int = 25,
+        max_companies: int = 5,
+        min_contacts_per_company: int = 30,
+        limit_per_company: int = 45,
         log_cb=None,
     ) -> dict:
         """
         For each company (in increasing size order unless specified):
         1. Searches for PEC Chandigarh alumni at that company -> category = 'pec_alumni'
-        2. Searches for target keywords (Founder's Office, HR, Talent, Product, Analyst)
-           -> category = 'other' (or 'pec_alumni' if PEC detected)
-        3. Connected (1st-degree) people go directly to 'sending_list' so they're ready to message!
+        2. Searches paginated LinkedIn people search + /company/{slug}/people/ across
+           keywords (Founder's Office, HR, Talent, Product, Analyst) targeting 30+ minimum contacts.
+        3. Connected (1st-degree) people go directly to 'sending_list' (waiting for user templates);
+           non-connected go to 'discovered' (ready to maximize connection requests).
         """
         def log(msg):
             logger.info(msg)
@@ -734,114 +736,128 @@ class MumbaiOutreachEngine:
                 log("⚠️ LinkedIn session expired (/uas/login). Please click 'LinkedIn: Update Key' in top bar to paste fresh li_at cookie.")
                 return {"status": "Auth Required", "message": "LinkedIn authentication required (update li_at cookie)."}
 
+            auth_failed = False
             for comp in target_companies:
+                if auth_failed:
+                    break
                 comp_name = comp["name"]
                 comp_slug = comp["linkedin_slug"]
                 comp_id = comp["id"]
-                log(f"Extracting contacts for '{comp_name}' ({comp['size_tier']} employees)...")
+                log(f"Extracting 30+ contacts for '{comp_name}' ({comp['size_tier']} employees)...")
 
                 company_found = 0
+
+                def _ingest_people(raw_list, default_kw="Target", force_pec=False):
+                    nonlocal company_found
+                    added_here = 0
+                    for p in raw_list:
+                        if company_found >= limit_per_company:
+                            break
+                        purl = p.get("profile_url", "")
+                        if not purl or purl in contacts_by_url:
+                            continue
+                        headline = p.get("headline", "")
+                        kw_hit = _match_keyword(headline, kw_list) or default_kw
+                        is_pec = force_pec or _is_pec_alumni_text(headline)
+                        is_1st = p.get("is_connection", False) or p.get("degree") == "1st"
+                        rec = {
+                            "id": str(abs(hash(purl))),
+                            "company_id": comp_id,
+                            "company_name": comp_name,
+                            "size_tier": comp["size_tier"],
+                            "name": p.get("name", "LinkedIn Member"),
+                            "first_name": p.get("name", "there").split()[0],
+                            "headline": headline,
+                            "profile_url": purl,
+                            "matched_keyword": kw_hit,
+                            "category": "pec_alumni" if is_pec else "other",
+                            "is_pec_alumni": is_pec,
+                            "degree": "1st" if is_1st else p.get("degree", "2nd/3rd"),
+                            "connection_status": "connected_ready" if is_1st else "not_connected",
+                            "workflow_stage": "sending_list" if is_1st else "discovered",
+                            "discovered_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "connection_sent_at": None,
+                            "accepted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S") if is_1st else None,
+                            "messaged_at": None,
+                            "last_checked_at": None,
+                            "message_used": "",
+                        }
+                        existing_contacts.append(rec)
+                        contacts_by_url[purl] = rec
+                        newly_discovered.append(rec)
+                        company_found += 1
+                        added_here += 1
+                    return added_here
 
                 # Pass A: Search PEC Chandigarh alumni at this company
                 pec_urls_to_check = [
                     f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus('Punjab Engineering College')}",
                     f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(comp_name + ' Punjab Engineering College')}",
+                    f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(comp_name + ' PEC Chandigarh')}",
                 ]
                 for search_url in pec_urls_to_check:
                     try:
                         page.goto(search_url, wait_until="domcontentloaded")
-                        human_delay(3.0, 4.5)
+                        human_delay(2.5, 3.5)
+                        if "uas/login" in page.url or "checkpoint" in page.url:
+                            log("⚠️ LinkedIn redirected to Login/Checkpoint! Your saved li_at cookie expired. Click 'LinkedIn: Update Key' in the header to update li_at.")
+                            auth_failed = True
+                            break
                         raw_people = self.referral_engine._extract_search_results(page, comp_name, "PEC Alumni")
-                        for p in raw_people:
-                            purl = p.get("profile_url", "")
-                            if not purl or purl in contacts_by_url:
-                                continue
-                            headline = p.get("headline", "")
-                            kw_hit = _match_keyword(headline, kw_list) or "PEC Alumni"
-                            is_1st = p.get("is_connection", False) or p.get("degree") == "1st"
-                            rec = {
-                                "id": str(abs(hash(purl))),
-                                "company_id": comp_id,
-                                "company_name": comp_name,
-                                "size_tier": comp["size_tier"],
-                                "name": p.get("name", "LinkedIn Member"),
-                                "first_name": p.get("name", "there").split()[0],
-                                "headline": headline,
-                                "profile_url": purl,
-                                "matched_keyword": kw_hit,
-                                "category": "pec_alumni",
-                                "is_pec_alumni": True,
-                                "degree": "1st" if is_1st else p.get("degree", "2nd/3rd"),
-                                "connection_status": "connected_ready" if is_1st else "not_connected",
-                                "workflow_stage": "sending_list" if is_1st else "discovered",
-                                "discovered_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "connection_sent_at": None,
-                                "accepted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S") if is_1st else None,
-                                "messaged_at": None,
-                                "last_checked_at": None,
-                                "message_used": "",
-                            }
-                            existing_contacts.append(rec)
-                            contacts_by_url[purl] = rec
-                            newly_discovered.append(rec)
-                            company_found += 1
+                        _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
                     except Exception as e:
                         logger.debug(f"PEC search error at {comp_name}: {e}")
 
-                # Pass B: Search Target Keywords (Founder's Office, HR, Talent, Product, Analyst)
+                if auth_failed:
+                    break
+
+                # Pass B: Paginated search across Target Keywords until 30+ contacts (up to limit_per_company)
                 for kw in kw_list:
                     if company_found >= limit_per_company:
                         break
-                    query = f"{comp_name} {kw} Mumbai"
-                    search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(query)}"
-                    try:
-                        page.goto(search_url, wait_until="domcontentloaded")
-                        human_delay(2.5, 4.0)
-                        raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
-                        for p in raw_people:
-                            if company_found >= limit_per_company:
+                    for pg in range(1, 4):  # Pages 1..3 per keyword
+                        if company_found >= limit_per_company:
+                            break
+                        query = f"{comp_name} {kw} Mumbai" if pg == 1 else f"{comp_name} {kw}"
+                        search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(query)}&page={pg}"
+                        try:
+                            page.goto(search_url, wait_until="domcontentloaded")
+                            human_delay(2.2, 3.5)
+                            if "uas/login" in page.url or "checkpoint" in page.url:
+                                log("⚠️ LinkedIn redirected to Login! Click 'LinkedIn: Update Key' to refresh your li_at cookie.")
+                                auth_failed = True
                                 break
-                            purl = p.get("profile_url", "")
-                            if not purl or purl in contacts_by_url:
-                                continue
-                            headline = p.get("headline", "")
-                            kw_hit = _match_keyword(headline, kw_list) or kw
-                            is_pec = _is_pec_alumni_text(headline)
-                            is_1st = p.get("is_connection", False) or p.get("degree") == "1st"
-                            rec = {
-                                "id": str(abs(hash(purl))),
-                                "company_id": comp_id,
-                                "company_name": comp_name,
-                                "size_tier": comp["size_tier"],
-                                "name": p.get("name", "LinkedIn Member"),
-                                "first_name": p.get("name", "there").split()[0],
-                                "headline": headline,
-                                "profile_url": purl,
-                                "matched_keyword": kw_hit,
-                                "category": "pec_alumni" if is_pec else "other",
-                                "is_pec_alumni": is_pec,
-                                "degree": "1st" if is_1st else p.get("degree", "2nd/3rd"),
-                                "connection_status": "connected_ready" if is_1st else "not_connected",
-                                "workflow_stage": "sending_list" if is_1st else "discovered",
-                                "discovered_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "connection_sent_at": None,
-                                "accepted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S") if is_1st else None,
-                                "messaged_at": None,
-                                "last_checked_at": None,
-                                "message_used": "",
-                            }
-                            existing_contacts.append(rec)
-                            contacts_by_url[purl] = rec
-                            newly_discovered.append(rec)
-                            company_found += 1
-                    except Exception as e:
-                        logger.debug(f"Keyword '{kw}' search error at {comp_name}: {e}")
+                            raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
+                            added_pg = _ingest_people(raw_people, default_kw=kw, force_pec=False)
+                            if not raw_people or (added_pg == 0 and pg >= 2):
+                                break
+                        except Exception as e:
+                            logger.debug(f"Keyword '{kw}' pg {pg} search error at {comp_name}: {e}")
+                    if auth_failed:
+                        break
+
+                # Pass C: Fallback company /people/ keyword pages if still below 30+
+                if not auth_failed and company_found < min_contacts_per_company:
+                    for kw in kw_list[:3]:
+                        if company_found >= limit_per_company:
+                            break
+                        try:
+                            curl = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus(kw)}"
+                            page.goto(curl, wait_until="domcontentloaded")
+                            human_delay(2.5, 3.5)
+                            raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=False)
+                            _ingest_people(raw_people, default_kw=kw, force_pec=False)
+                        except Exception:
+                            pass
 
                 comp["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 log(f"Discovered {company_found} segregated contacts for '{comp_name}'.")
 
             self.save_companies(all_companies)
             self.save_contacts(existing_contacts)
+
+            if auth_failed and not newly_discovered:
+                return {"status": "Auth Required", "message": "LinkedIn redirected to /uas/login. Please update your li_at cookie via 'LinkedIn: Update Key'."}
 
             pec_count = sum(1 for c in newly_discovered if c["is_pec_alumni"])
             other_count = len(newly_discovered) - pec_count
@@ -881,22 +897,21 @@ class MumbaiOutreachEngine:
         )
 
     # ------------------------------------------------------------------
-    # Step 3: Maximize Connection Requests + Message Sending List
+    # Step 3A: Maximize Connection Requests ONLY (Store Sending List, No Messaging Until Requested)
     # ------------------------------------------------------------------
     def run_connect_and_message_cycle(
         self,
         company_ids: list = None,
         contact_ids: list = None,
-        max_connects: int = 25,
-        max_messages: int = 25,
+        max_connects: int = 35,
+        max_messages: int = 30,
+        connect_only: bool = True,
         log_cb=None,
     ) -> dict:
         """
         Executes in strict increasing company size order (250-500 -> 500-1000 -> 1000+):
-        1. Sends messages to everyone currently in 'sending_list' (already connected & unmessaged).
-        2. Visits 'discovered' contacts:
-           - If connected (1st degree): adds to Sending List & sends company PEC/Other template immediately -> 'completed'.
-           - If NOT connected: sends clean Connection Request (maximizing quota) -> moves to 'incomplete_pending_accept'.
+        - If NOT connected: sends clean Connection Request (no note, maximizing volume) -> 'incomplete_pending_accept'.
+        - If ALREADY connected (1st degree): stores in 'sending_list' (or messages only if connect_only=False).
         """
         def log(msg):
             logger.info(msg)
@@ -907,10 +922,8 @@ class MumbaiOutreachEngine:
         companies_by_id = {str(c.get("id")): c for c in companies}
         all_contacts = self.get_contacts()
 
-        candidates = [
-            c for c in all_contacts
-            if c.get("workflow_stage") in ("discovered", "sending_list")
-        ]
+        allowed_stages = ("discovered",) if connect_only else ("discovered", "sending_list")
+        candidates = [c for c in all_contacts if c.get("workflow_stage") in allowed_stages]
         if company_ids:
             id_set = {str(cid) for cid in company_ids}
             candidates = [c for c in candidates if str(c.get("company_id")) in id_set]
@@ -918,16 +931,15 @@ class MumbaiOutreachEngine:
             cset = {str(cid) for cid in contact_ids}
             candidates = [c for c in candidates if str(c.get("id")) in cset]
 
-        # Priority: Sending List (accepted/ready) first, then smallest size tier (250-500 -> 500-1000 -> 1000+), PEC alumni first
+        # Strict increasing size tier order (250-500 first, then 500-1000, then 1000+), PEC alumni first
         candidates.sort(key=lambda c: (
-            0 if c.get("workflow_stage") == "sending_list" else 1,
             SIZE_TIER_RANK.get(c.get("size_tier", "1000+"), 4),
             int((companies_by_id.get(str(c.get("company_id"))) or {}).get("employee_count", 1000)),
             0 if c.get("is_pec_alumni") else 1,
         ))
 
         if not candidates:
-            return {"status": "Idle", "message": "No new discovered or ready contacts queued."}
+            return {"status": "Idle", "message": "No new discovered contacts queued for connection requests."}
 
         context, page = self.browser_mgr.get_context_and_page(force_headless=True)
         connects_sent = 0
@@ -943,7 +955,7 @@ class MumbaiOutreachEngine:
                 return {"status": "Auth Required", "message": "LinkedIn login required (update li_at cookie)."}
 
             for contact in candidates:
-                if connects_sent >= max_connects and messages_sent >= max_messages:
+                if connects_sent >= max_connects and (connect_only or messages_sent >= max_messages):
                     break
 
                 purl = contact.get("profile_url")
@@ -953,9 +965,13 @@ class MumbaiOutreachEngine:
                     continue
 
                 try:
-                    log(f"Processing {name} ({comp_name}, {contact.get('size_tier')}, {'PEC' if contact.get('is_pec_alumni') else 'Other'})...")
+                    log(f"Connecting with {name} ({comp_name}, {contact.get('size_tier')}, {'PEC' if contact.get('is_pec_alumni') else 'Other'})...")
                     page.goto(purl, wait_until="domcontentloaded")
-                    human_delay(2.5, 4.0)
+                    human_delay(2.2, 3.5)
+
+                    if "uas/login" in page.url or "checkpoint" in page.url:
+                        log("⚠️ LinkedIn redirected to Login! Update li_at cookie first.")
+                        break
 
                     pending_btn = page.locator("main button:has-text('Pending'), main span:has-text('Pending')").first
                     is_already_pending = pending_btn.count() > 0 and pending_btn.is_visible()
@@ -972,7 +988,7 @@ class MumbaiOutreachEngine:
                         if not contact.get("accepted_at"):
                             contact["accepted_at"] = now_str
 
-                        if messages_sent < max_messages:
+                        if not connect_only and messages_sent < max_messages:
                             msg_text = self._render_message_for_contact(contact, companies_by_id)
                             sent = self.referral_engine._send_direct_message(page, msg_text)
                             if sent:
@@ -983,6 +999,8 @@ class MumbaiOutreachEngine:
                                 contact["message_used"] = msg_text
                                 self._increment_daily_stat("messages_sent", 1)
                                 log(f"[COMPLETED] Sent tailored message to {name} ({comp_name}).")
+                        else:
+                            log(f"[SENDING LIST] {name} ({comp_name}) is already 1st-degree -> added to Sending List (awaiting your Send Messages trigger).")
                     elif is_already_pending:
                         contact["connection_status"] = "connection_sent"
                         contact["workflow_stage"] = "incomplete_pending_accept"
@@ -999,21 +1017,104 @@ class MumbaiOutreachEngine:
                             contact["workflow_stage"] = "incomplete_pending_accept"
                             contact["connection_sent_at"] = now_str
                             self._increment_daily_stat("connections_sent", 1)
-                            log(f"[INCOMPLETE] Connection request sent to {name} ({comp_name}). Tracked for daily check.")
+                            log(f"[INCOMPLETE] Connection request ({connects_sent}/{max_connects}) sent to {name} ({comp_name}).")
                         else:
                             log(f"Could not find Connect button for {name} (may be Follow-only).")
 
-                    human_delay(2.0, 3.5)
+                    human_delay(2.0, 3.2)
                 except Exception as e:
                     logger.warning(f"Error processing {name}: {e}")
 
             self.save_contacts(all_contacts)
-            log(f"Cycle finished: {connects_sent} connection requests sent, {messages_sent} messages sent.")
+            log(f"Connection maximization finished: {connects_sent} invites sent, {messages_sent} messages sent.")
             return {
                 "status": "Success",
                 "connections_sent": connects_sent,
                 "messages_sent": messages_sent,
             }
+        finally:
+            self.browser_mgr.close()
+
+    # ------------------------------------------------------------------
+    # Step 3B: Send Messages ONLY (Triggered When User Fixes Templates & Asks to Send)
+    # ------------------------------------------------------------------
+    def run_send_messages_only(
+        self,
+        company_ids: list = None,
+        contact_ids: list = None,
+        max_messages: int = 35,
+        log_cb=None,
+    ) -> dict:
+        """
+        Sends each company's customized PEC Chandigarh or Other message template ONLY to
+        connected/accepted contacts in 'sending_list' and moves them to 'completed'.
+        """
+        def log(msg):
+            logger.info(msg)
+            if log_cb:
+                log_cb(msg)
+
+        companies = self.get_companies()
+        companies_by_id = {str(c.get("id")): c for c in companies}
+        all_contacts = self.get_contacts()
+
+        candidates = [c for c in all_contacts if c.get("workflow_stage") == "sending_list"]
+        if company_ids:
+            id_set = {str(cid) for cid in company_ids}
+            candidates = [c for c in candidates if str(c.get("company_id")) in id_set]
+        if contact_ids:
+            cset = {str(cid) for cid in contact_ids}
+            candidates = [c for c in candidates if str(c.get("id")) in cset]
+
+        if not candidates:
+            log("Sending List is empty. Run 'Find 30+ Contacts' or 'Daily Check Accepted' first.")
+            return {"status": "Idle", "messages_sent": 0}
+
+        context, page = self.browser_mgr.get_context_and_page(force_headless=True)
+        messages_sent = 0
+        try:
+            try:
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+            except Exception:
+                pass
+
+            if not self.browser_mgr.ensure_logged_in(page, timeout_sec=10):
+                return {"status": "Auth Required", "message": "LinkedIn login required (update li_at cookie)."}
+
+            for contact in candidates:
+                if messages_sent >= max_messages:
+                    break
+                purl = contact.get("profile_url")
+                name = contact.get("name", "Contact")
+                comp_name = contact.get("company_name", "")
+                if not purl:
+                    continue
+
+                try:
+                    page.goto(purl, wait_until="domcontentloaded")
+                    human_delay(2.2, 3.5)
+                    if "uas/login" in page.url or "checkpoint" in page.url:
+                        log("⚠️ LinkedIn redirected to Login! Update li_at cookie.")
+                        break
+
+                    msg_text = self._render_message_for_contact(contact, companies_by_id)
+                    sent = self.referral_engine._send_direct_message(page, msg_text)
+                    if sent:
+                        messages_sent += 1
+                        contact["connection_status"] = "messaged"
+                        contact["workflow_stage"] = "completed"
+                        contact["messaged_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        contact["message_used"] = msg_text
+                        self._increment_daily_stat("messages_sent", 1)
+                        self._increment_daily_stat("completed_followups", 1)
+                        log(f"[COMPLETED] Delivered {'PEC' if contact.get('is_pec_alumni') else 'Other'} template message to {name} ({comp_name}).")
+                    human_delay(2.0, 3.5)
+                except Exception as e:
+                    logger.warning(f"Error messaging {name}: {e}")
+
+            self.save_contacts(all_contacts)
+            log(f"✅ Sending List execution finished: {messages_sent} customized messages sent!")
+            return {"status": "Success", "messages_sent": messages_sent}
         finally:
             self.browser_mgr.close()
 
@@ -1024,7 +1125,7 @@ class MumbaiOutreachEngine:
         self,
         min_age_days: int = 0,
         check_all_pending: bool = True,
-        send_immediately: bool = True,
+        send_immediately: bool = False,
         log_cb=None,
     ) -> dict:
         """
@@ -1181,8 +1282,8 @@ class MumbaiOutreachEngine:
             self.browser_mgr.close()
 
     # Backwards-compatible alias
-    def run_2day_followup_check(self, min_age_days: int = 0, check_all_pending: bool = True, log_cb=None) -> dict:
-        return self.run_daily_acceptance_and_send(min_age_days=0, check_all_pending=True, send_immediately=True, log_cb=log_cb)
+    def run_2day_followup_check(self, min_age_days: int = 0, check_all_pending: bool = True, send_immediately: bool = False, log_cb=None) -> dict:
+        return self.run_daily_acceptance_and_send(min_age_days=min_age_days, check_all_pending=check_all_pending, send_immediately=send_immediately, log_cb=log_cb)
 
     # ------------------------------------------------------------------
     # Dashboard Payload Aggregator

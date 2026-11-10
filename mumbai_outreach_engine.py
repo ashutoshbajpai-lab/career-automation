@@ -737,8 +737,9 @@ class MumbaiOutreachEngine:
                 return {"status": "Auth Required", "message": "LinkedIn authentication required (update li_at cookie)."}
 
             auth_failed = False
+            rate_limited = False
             for comp in target_companies:
-                if auth_failed:
+                if auth_failed or rate_limited:
                     break
                 comp_name = comp["name"]
                 comp_slug = comp["linkedin_slug"]
@@ -789,6 +790,30 @@ class MumbaiOutreachEngine:
                         added_here += 1
                     return added_here
 
+                def _goto_and_check(target_url):
+                    nonlocal auth_failed, rate_limited
+                    try:
+                        resp = page.goto(target_url, wait_until="domcontentloaded")
+                        human_delay(3.0, 4.6)
+                        if resp and resp.status == 429:
+                            log("⚠️ LinkedIn returned HTTP 429 (rate limit). Stopping cleanly and saving contacts found so far — retry in 10–15 min.")
+                            rate_limited = True
+                            return False
+                        if "uas/login" in page.url or "checkpoint" in page.url:
+                            log("⚠️ LinkedIn redirected to Login/Checkpoint! Click 'LinkedIn: Update Key' in the header to update session.")
+                            self.browser_mgr.mark_session_expired("search_redirect")
+                            auth_failed = True
+                            return False
+                        return True
+                    except Exception as e:
+                        err_s = str(e)
+                        if "ERR_TOO_MANY_REDIRECTS" in err_s or "429" in err_s:
+                            log("⚠️ LinkedIn triggered redirect-loop / rate limit (429). Saving discovered contacts and pausing batch cleanly.")
+                            rate_limited = True
+                            return False
+                        logger.debug(f"Search navigation warning for {target_url}: {e}")
+                        return False
+
                 # Pass A: Search PEC Chandigarh alumni at this company
                 pec_urls_to_check = [
                     f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus('Punjab Engineering College')}",
@@ -796,83 +821,65 @@ class MumbaiOutreachEngine:
                     f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(comp_name + ' PEC Chandigarh')}",
                 ]
                 for search_url in pec_urls_to_check:
-                    try:
-                        page.goto(search_url, wait_until="domcontentloaded")
-                        human_delay(2.5, 3.5)
-                        if "uas/login" in page.url or "checkpoint" in page.url:
-                            log("⚠️ LinkedIn redirected to Login/Checkpoint! Your saved li_at cookie expired. Click 'LinkedIn: Update Key' in the header to update li_at.")
-                            self.browser_mgr.mark_session_expired("pec_search_redirect")
-                            auth_failed = True
-                            break
-                        raw_people = self.referral_engine._extract_search_results(page, comp_name, "PEC Alumni")
-                        _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
-                    except Exception as e:
-                        logger.debug(f"PEC search error at {comp_name}: {e}")
+                    if auth_failed or rate_limited or company_found >= limit_per_company:
+                        break
+                    if _goto_and_check(search_url):
+                        try:
+                            raw_people = self.referral_engine._extract_search_results(page, comp_name, "PEC Alumni")
+                            _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
+                        except Exception as e:
+                            logger.debug(f"PEC extraction error at {comp_name}: {e}")
 
-                if auth_failed:
+                if auth_failed or rate_limited:
                     break
 
-                # Pass B: Paginated search across Target Keywords until 30+ contacts (up to limit_per_company)
+                # Pass B: Paginated search across Target Keywords until min_contacts_per_company (30+) reached
                 for kw in kw_list:
-                    if company_found >= limit_per_company:
+                    if company_found >= min_contacts_per_company or auth_failed or rate_limited:
                         break
                     for pg in range(1, 4):  # Pages 1..3 per keyword
-                        if company_found >= limit_per_company:
+                        if company_found >= limit_per_company or company_found >= min_contacts_per_company or auth_failed or rate_limited:
                             break
                         query = f"{comp_name} {kw} Mumbai" if pg == 1 else f"{comp_name} {kw}"
                         search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(query)}&page={pg}"
-                        try:
-                            page.goto(search_url, wait_until="domcontentloaded")
-                            human_delay(2.2, 3.5)
-                            if "uas/login" in page.url or "checkpoint" in page.url:
-                                log("⚠️ LinkedIn redirected to Login! Click 'LinkedIn: Update Key' to refresh your li_at cookie.")
-                                self.browser_mgr.mark_session_expired("keyword_search_redirect")
-                                auth_failed = True
-                                break
-                            raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
-                            added_pg = _ingest_people(raw_people, default_kw=kw, force_pec=False)
-                            if not raw_people or (added_pg == 0 and pg >= 2):
-                                break
-                        except Exception as e:
-                            logger.debug(f"Keyword '{kw}' pg {pg} search error at {comp_name}: {e}")
-                    if auth_failed:
-                        break
+                        if _goto_and_check(search_url):
+                            try:
+                                raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
+                                added_pg = _ingest_people(raw_people, default_kw=kw, force_pec=False)
+                                if not raw_people or (added_pg == 0 and pg >= 2):
+                                    break
+                            except Exception as e:
+                                logger.debug(f"Keyword '{kw}' pg {pg} extraction error at {comp_name}: {e}")
 
                 # Pass C: Fallback company /people/ keyword pages if still below 30+
-                if not auth_failed and company_found < min_contacts_per_company:
+                if not auth_failed and not rate_limited and company_found < min_contacts_per_company:
                     for kw in kw_list[:3]:
-                        if company_found >= limit_per_company or auth_failed:
+                        if company_found >= min_contacts_per_company or auth_failed or rate_limited:
                             break
-                        try:
-                            curl = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus(kw)}"
-                            page.goto(curl, wait_until="domcontentloaded")
-                            human_delay(2.5, 3.5)
-                            if "uas/login" in page.url or "checkpoint" in page.url:
-                                self.browser_mgr.mark_session_expired("company_people_redirect")
-                                auth_failed = True
-                                break
-                            raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=False)
-                            _ingest_people(raw_people, default_kw=kw, force_pec=False)
-                        except Exception:
-                            pass
+                        curl = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus(kw)}"
+                        if _goto_and_check(curl):
+                            try:
+                                raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=False)
+                                _ingest_people(raw_people, default_kw=kw, force_pec=False)
+                            except Exception:
+                                pass
 
-                if auth_failed:
-                    break
-
-                comp["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log(f"Discovered {company_found} segregated contacts for '{comp_name}'.")
-
-            self.save_companies(all_companies)
-            self.save_contacts(existing_contacts)
+                # Incremental checkpoint save after every company so discovered contacts are never lost
+                if company_found > 0 or not rate_limited:
+                    comp["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                self.save_companies(all_companies)
+                self.save_contacts(existing_contacts)
+                log(f"Discovered & saved {company_found} segregated contacts for '{comp_name}'.")
 
             if auth_failed and not newly_discovered:
-                return {"status": "Auth Required", "message": "LinkedIn redirected to /uas/login. Please update your li_at cookie via 'LinkedIn: Update Key'."}
+                return {"status": "Auth Required", "message": "LinkedIn redirected to /uas/login. Please update your session via 'LinkedIn: Update Key'."}
 
             pec_count = sum(1 for c in newly_discovered if c["is_pec_alumni"])
             other_count = len(newly_discovered) - pec_count
-            log(f"Contact discovery complete: {len(newly_discovered)} new ({pec_count} PEC Alumni, {other_count} Other).")
+            status_str = "Rate Limited (Saved Partial)" if rate_limited else "Success"
+            log(f"Contact discovery finished ({status_str}): {len(newly_discovered)} new ({pec_count} PEC Alumni, {other_count} Other).")
             return {
-                "status": "Success",
+                "status": status_str,
                 "total_new": len(newly_discovered),
                 "pec_new": pec_count,
                 "other_new": other_count,

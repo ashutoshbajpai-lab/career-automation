@@ -3071,7 +3071,7 @@ MERAKI_UI_HTML = """
           body: JSON.stringify({
             company_ids: companyIds,
             keywords: kw,
-            max_companies: 5,
+            max_companies: 2,
             min_contacts_per_company: 30,
             limit_per_company: 45
           })
@@ -3968,28 +3968,19 @@ def update_cookies_route():
         except Exception:
             cookies = []
 
-    # Update or add li_at cookie
-    found = False
-    for c in cookies:
-        if c.get("name") == "li_at":
-            c["value"] = li_at_val
-            c["expires"] = time.time() + (365 * 24 * 3600)
-            c["domain"] = ".linkedin.com"
-            c["secure"] = True
-            c["httpOnly"] = True
-            c["sameSite"] = "None"
-            found = True
-    if not found:
-        cookies.append({
-            "name": "li_at",
-            "value": li_at_val,
-            "domain": ".linkedin.com",
-            "path": "/",
-            "expires": time.time() + (365 * 24 * 3600),
-            "httpOnly": True,
-            "secure": True,
-            "sameSite": "None"
-        })
+    # Remove stale mismatched LinkedIn cookies (e.g. old JSESSIONID/liap from earlier sessions)
+    # while preserving Naukri/Google cookies, then store the single fresh .linkedin.com li_at.
+    cookies = [c for c in cookies if "linkedin" not in (c.get("domain") or "").lower()]
+    cookies.append({
+        "name": "li_at",
+        "value": li_at_val,
+        "domain": ".linkedin.com",
+        "path": "/",
+        "expires": time.time() + (365 * 24 * 3600),
+        "httpOnly": True,
+        "secure": True,
+        "sameSite": "None"
+    })
 
     payload = {
         "status": "active",

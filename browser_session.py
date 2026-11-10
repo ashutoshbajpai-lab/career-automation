@@ -166,13 +166,17 @@ class BrowserManager:
                     logger.warning(f"Failed to decode SESSION_COOKIES_BASE64: {e}")
 
         if cookies:
-            # Remove any stale li_at cookies stored in chrome_profile (e.g. .www.linkedin.com)
-            # that would otherwise shadow the fresh .linkedin.com li_at from session_cookies.json.
+            # Remove any stale LinkedIn cookies stored in chrome_profile (e.g. .www.linkedin.com li_at
+            # or expired JSESSIONID) so they never conflict with session_cookies.json.
             if any(c.get("name") == "li_at" and c.get("value") for c in cookies):
                 try:
-                    self.context.clear_cookies(name="li_at")
+                    import re
+                    self.context.clear_cookies(domain=re.compile(r"linkedin\.com$"))
                 except Exception:
-                    pass
+                    try:
+                        self.context.clear_cookies(name="li_at")
+                    except Exception:
+                        pass
             try:
                 self.context.add_cookies(cookies)
                 logger.info(f"Injected {len(cookies)} authentication cookies into browser session.")

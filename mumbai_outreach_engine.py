@@ -268,7 +268,10 @@ def _is_pec_alumni_text(text: str) -> bool:
     ]
     if any(m in low for m in pec_markers):
         return True
-    if re.search(r"\bpec\b", low):
+    if re.search(r"\bpec\b", low) and re.search(
+        r"\b(chandigarh|college|alumni|b\.?tech|b\.?e\.?|engineer|engineering|university|grad|student|class of)\b|['’]\d{2}",
+        low,
+    ):
         return True
     return False
 
@@ -750,7 +753,19 @@ class MumbaiOutreachEngine:
                 company_found = 0
                 pages_loaded = 0
 
-                def _ingest_people(raw_list, default_kw="Target", force_pec=False):
+                def _matches_company(full_text_low: str) -> bool:
+                    cn_low = comp_name.lower()
+                    if cn_low in full_text_low:
+                        return True
+                    slug_clean = comp_slug.replace("-", " ").strip().lower()
+                    if slug_clean and len(slug_clean) >= 3 and slug_clean in full_text_low:
+                        return True
+                    tokens = [t for t in re.split(r"[^a-z0-9]+", cn_low) if len(t) >= 3 and t not in ("india", "labs", "tech", "technologies", "private", "limited", "solutions", "group", "capital", "ventures")]
+                    if tokens and any(t in full_text_low for t in tokens):
+                        return True
+                    return False
+
+                def _ingest_people(raw_list, default_kw="Target", force_pec=False, require_company_match=True):
                     nonlocal company_found
                     added_here = 0
                     for p in raw_list:
@@ -761,12 +776,16 @@ class MumbaiOutreachEngine:
                             continue
                         headline = p.get("headline", "")
                         full_text = p.get("full_card_text", headline)
+                        full_low = full_text.lower()
                         # Guard against mutual-connection / navbar bleed-through
-                        if "0 notifications" in full_text or "skip to search" in full_text.lower():
+                        if "0 notifications" in full_low or "skip to search" in full_low:
+                            continue
+                        # Verify person actually belongs to this company (prevents generic college search pollution)
+                        if require_company_match and not _matches_company(full_low):
                             continue
                         kw_hit = _match_keyword(full_text, kw_list) or default_kw
-                        # Only mark PEC Alumni if scoped company/people PEC search OR card text explicitly proves PEC Chandigarh
-                        is_pec = _is_pec_alumni_text(full_text) or (force_pec and comp_name.lower().split()[0] in full_text.lower())
+                        # Strictly require actual PEC Chandigarh / Punjab Engineering College text (never assume from URL)
+                        is_pec = _is_pec_alumni_text(full_text)
                         is_1st = p.get("is_connection", False) or p.get("degree") == "1st"
                         rec = {
                             "id": str(abs(hash(purl))),
@@ -836,7 +855,7 @@ class MumbaiOutreachEngine:
                 if _goto_and_check(pec_company_url):
                     try:
                         raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=True)
-                        _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
+                        _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=False, require_company_match=False)
                     except Exception as e:
                         logger.debug(f"PEC extraction error at {comp_name}: {e}")
 
@@ -868,7 +887,7 @@ class MumbaiOutreachEngine:
                         if _goto_and_check(curl):
                             try:
                                 raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=False)
-                                _ingest_people(raw_people, default_kw=kw, force_pec=False)
+                                _ingest_people(raw_people, default_kw=kw, force_pec=False, require_company_match=False)
                             except Exception:
                                 pass
 
@@ -923,6 +942,41 @@ class MumbaiOutreachEngine:
     # ------------------------------------------------------------------
     # Step 3A: Maximize Connection Requests ONLY (Store Sending List, No Messaging Until Requested)
     # ------------------------------------------------------------------
+    @staticmethod
+    def _verify_pec_from_profile(page, contact: dict, log=None):
+        """Inspects live LinkedIn profile Education/About sections so non-PEC grads never get PEC templates."""
+        try:
+            edu_text = page.evaluate('''() => {
+                const mainEl = document.querySelector('main');
+                if (!mainEl) return { hasEdu: false, eduText: '', mainText: '' };
+                const eduAnchor = mainEl.querySelector('#education');
+                const eduSec = eduAnchor ? eduAnchor.closest('section') : null;
+                const eduText = eduSec ? (eduSec.innerText || '') : '';
+                return {
+                    hasEdu: Boolean(eduSec && eduText.trim().length > 15),
+                    eduText: eduText.slice(0, 2000),
+                    mainText: (mainEl.innerText || '').slice(0, 6000)
+                };
+            }''')
+            if not isinstance(edu_text, dict):
+                return
+            combined_edu = edu_text.get("eduText", "") or ""
+            full_main = edu_text.get("mainText", "") or ""
+            if _is_pec_alumni_text(combined_edu) or _is_pec_alumni_text(full_main):
+                if not contact.get("is_pec_alumni") and log:
+                    log(f"[PEC VERIFIED] {contact.get('name')} studied at PEC Chandigarh — upgraded to PEC Alumni.")
+                contact["is_pec_alumni"] = True
+                contact["category"] = "pec_alumni"
+                contact["pec_verified"] = True
+            elif edu_text.get("hasEdu"):
+                if contact.get("is_pec_alumni") and log:
+                    log(f"[PEC CORRECTED] {contact.get('name')} Education does not list PEC Chandigarh — moved to Other.")
+                contact["is_pec_alumni"] = False
+                contact["category"] = "other"
+                contact["pec_verified"] = False
+        except Exception:
+            pass
+
     def run_connect_and_message_cycle(
         self,
         company_ids: list = None,
@@ -998,6 +1052,8 @@ class MumbaiOutreachEngine:
                         log("⚠️ LinkedIn redirected to Login! Update li_at cookie first.")
                         self.browser_mgr.mark_session_expired("connect_cycle_redirect")
                         break
+
+                    self._verify_pec_from_profile(page, contact, log)
 
                     pending_btn = page.locator("main button:has-text('Pending'), main span:has-text('Pending')").first
                     is_already_pending = pending_btn.count() > 0 and pending_btn.is_visible()
@@ -1125,6 +1181,7 @@ class MumbaiOutreachEngine:
                         self.browser_mgr.mark_session_expired("send_messages_redirect")
                         break
 
+                    self._verify_pec_from_profile(page, contact, log)
                     msg_text = self._render_message_for_contact(contact, companies_by_id)
                     sent = self.referral_engine._send_direct_message(page, msg_text)
                     if sent:

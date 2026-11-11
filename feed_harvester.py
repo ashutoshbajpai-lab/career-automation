@@ -7,6 +7,7 @@ import os
 import re
 import csv
 import json
+import time
 import logging
 import urllib.parse
 from datetime import datetime
@@ -126,17 +127,26 @@ class FeedHarvester:
                 pass
 
     def run(self) -> list:
-        self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
+        try:
+            self.page.route(
+                "**/*",
+                lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_()
+            )
+        except Exception:
+            pass
+
+        feed_url = "https://www.linkedin.com/feed/foryou/"
+        self._log(f"Navigating to LinkedIn For You feed ({feed_url})...")
         nav_ok = False
         try:
-            resp = self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=35000)
+            resp = self.page.goto(feed_url, wait_until="domcontentloaded", timeout=35000)
             if not resp or resp.status != 429:
                 nav_ok = True
         except Exception as e:
             self._log(f"Navigation fallback: {e}")
             if "ERR_TOO_MANY_REDIRECTS" not in str(e):
                 try:
-                    self.page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=20000)
+                    self.page.goto(feed_url, wait_until="commit", timeout=20000)
                     nav_ok = True
                 except Exception:
                     pass
@@ -163,54 +173,95 @@ class FeedHarvester:
             return self._harvest_public_guest_jobs()
 
         low_mem = is_cloud_low_mem()
-        default_target = 40 if low_mem else 100
+        default_target = 28 if low_mem else 60
         target_posts = int(self.config.get("limits", {}).get("max_feed_posts_per_run", default_target))
         if low_mem:
-            target_posts = min(target_posts, 40)
-        elif target_posts < 100:
-            target_posts = 100
+            target_posts = min(target_posts, 28)
+        elif target_posts > 80:
+            target_posts = 60
 
-        self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts (LowMem={low_mem})...")
+        self._log(f"🚀 Starting deep feed harvester: targeting {target_posts} posts per batch (LowMem={low_mem})...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 30 if low_mem else 120
+        max_scroll_passes = 24 if low_mem else 45
+        stale_passes = 0
+        scroll_started_at = time.time()
+        max_scroll_seconds = 90 if low_mem else 180
 
         for scroll_i in range(1, max_scroll_passes + 1):
+            if time.time() - scroll_started_at >= max_scroll_seconds:
+                self._log(f"⏱️ Feed batch time cap ({max_scroll_seconds}s) reached at pass {scroll_i} with {len(raw_items)} posts.")
+                break
+            prev_raw_count = len(raw_items)
             try:
-                new_cards = self.page.evaluate('''() => {
-                    // Click see more to expand truncated recruiter emails and links
-                    document.querySelectorAll('button.feed-shared-inline-show-more-text, button[aria-label*="see more"], .feed-shared-see-more-less-toggle').forEach(b => {
-                        try { b.click(); } catch(e) {}
+                # Expand truncated "... more" / "see more" buttons inside unharvested main feed cards once
+                clicked_more = self.page.evaluate('''() => {
+                    const scope = document.querySelector('main#workspace') || document.querySelector('main') || document;
+                    let clicked = 0;
+                    scope.querySelectorAll(
+                        'button[data-testid="expandable-text-button"], ' +
+                        'button.feed-shared-inline-show-more-text, ' +
+                        'button[aria-label*="see more" i], ' +
+                        '.feed-shared-see-more-less-toggle'
+                    ).forEach(b => {
+                        if (b.getAttribute('data-more-clicked') === '1') return;
+                        if (b.closest('[data-harvested="1"]')) return;
+                        b.setAttribute('data-more-clicked', '1');
+                        try { b.click(); clicked++; } catch(e) {}
                     });
-                    
-                    // Match top-level post containers
-                    const potentialElements = Array.from(document.querySelectorAll(
-                        'div.feed-shared-update-v2, div[data-urn*="urn:li:"], div[data-id*="urn:li:"], div[data-view-name="feed-full-update"], [data-lazy-mount-id]'
-                    ));
+                    return clicked;
+                }''')
+                if clicked_more:
+                    self.page.wait_for_timeout(200)
+
+                new_cards = self.page.evaluate('''() => {
+                    // Match top-level post containers (SDUI /feed/foryou/ + legacy feed)
+                    const cardSelector = (
+                        'div[componentkey^="update-card-focus"], ' +
+                        'div[componentkey*="FeedType_MAIN_FEED"], ' +
+                        'div.feed-shared-update-v2, ' +
+                        'div[data-urn*="urn:li:"], ' +
+                        'div[data-id*="urn:li:"], ' +
+                        'div[data-view-name="feed-full-update"]'
+                    );
+                    let potentialElements = Array.from(document.querySelectorAll(cardSelector));
+                    if (!potentialElements.length) {
+                        potentialElements = Array.from(document.querySelectorAll('[data-lazy-mount-id]'));
+                    }
                     
                     const processedCards = new Set();
                     const results = [];
                     
                     potentialElements.forEach(el => {
-                        const card = el.closest('div.feed-shared-update-v2, div[data-urn*="urn:li:"], div[data-id*="urn:li:"], div[data-view-name="feed-full-update"]') || el;
+                        const card = el.closest(cardSelector) || el;
                         if (!card || processedCards.has(card) || card.hasAttribute('data-harvested')) return;
                         processedCards.add(card);
                         card.setAttribute('data-harvested', '1');
 
                         const rawText = (card.innerText || card.textContent || '').trim();
                         if (rawText.length > 60) {
-                            // Extract author name
-                            const authorEl = card.querySelector(
-                                ".update-components-actor__name span[aria-hidden='true'], " +
-                                ".update-components-actor__name, " +
-                                ".feed-shared-actor__name span[aria-hidden='true'], " +
-                                ".feed-shared-actor__name, " +
-                                "span.update-components-actor__title span[aria-hidden='true'], " +
-                                "a.update-components-actor__meta-link"
-                            );
-                            let authorName = authorEl ? (authorEl.textContent || '').trim() : '';
+                            // Extract author name: SDUI control menu aria-label first, then legacy actor selectors, then clean lines
+                            let authorName = '';
+                            const ctrlBtn = card.querySelector('button[aria-label^="Open control menu for post by "], button[aria-label*="post by " i]');
+                            if (ctrlBtn) {
+                                const aria = ctrlBtn.getAttribute('aria-label') || '';
+                                const m = aria.match(/post by\\s+(.+)$/i);
+                                if (m && m[1]) authorName = m[1].trim();
+                            }
                             if (!authorName) {
-                                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l && !l.startsWith('Feed post'));
+                                const authorEl = card.querySelector(
+                                    ".update-components-actor__name span[aria-hidden='true'], " +
+                                    ".update-components-actor__name, " +
+                                    ".feed-shared-actor__name span[aria-hidden='true'], " +
+                                    ".feed-shared-actor__name, " +
+                                    "span.update-components-actor__title span[aria-hidden='true'], " +
+                                    "a.update-components-actor__meta-link"
+                                );
+                                authorName = authorEl ? (authorEl.textContent || '').trim() : '';
+                            }
+                            if (!authorName) {
+                                const skipRe = /^(Feed post|Followed by|Reposted by|Promoted|\\d+|.*\\b(likes this|loves this|celebrates|finds this insightful|commented on|follows this page))$/i;
+                                const lines = rawText.split('\\n').map(l => l.trim()).filter(l => l && !skipRe.test(l));
                                 if (lines.length) authorName = lines[0].split('•')[0].trim();
                             }
 
@@ -282,8 +333,9 @@ class FeedHarvester:
                             });
                         }
                     });
-                    const main = document.querySelector('main') || document.scrollingElement || document.body;
+                    const main = document.querySelector('main#workspace') || document.querySelector('main') || document.scrollingElement || document.body;
                     main.scrollTop += 1400;
+                    main.dispatchEvent(new Event('scroll'));
                     window.scrollBy(0, 1400);
                     window.dispatchEvent(new Event('scroll'));
                     return results;
@@ -294,11 +346,23 @@ class FeedHarvester:
                         seen_card_hashes.add(h)
                         raw_items.append(card)
             except Exception as e:
-                self._log(f"⚠️ Pass {scroll_i} note: {e}")
+                err_str = str(e)
+                self._log(f"⚠️ Pass {scroll_i} note: {err_str}")
+                if any(k in err_str for k in ("Target crashed", "Target closed", "Execution context", "crashed")):
+                    self._log(f"🛑 Stopping scroll cleanly after {len(raw_items)} posts due to browser tab memory limit.")
+                    break
 
             if len(raw_items) >= target_posts:
                 self._log(f"🎯 Milestone reached: Collected {len(raw_items)} distinct posts ({target_posts}+ target achieved at pass {scroll_i})!")
                 break
+
+            if len(raw_items) == prev_raw_count:
+                stale_passes += 1
+                if stale_passes >= 8:
+                    self._log(f"Stopping feed scroll after {stale_passes} consecutive passes with no new cards ({len(raw_items)} collected).")
+                    break
+            else:
+                stale_passes = 0
 
             if scroll_i % 5 == 0:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")

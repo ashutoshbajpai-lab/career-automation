@@ -73,7 +73,14 @@ CURRENT_TASK = {"running": False, "name": "Idle", "started_at": None, "queued": 
 TASK_QUEUE = deque()
 TASK_LOCK = threading.Lock()
 LIVE_LOGS = []
-LAST_PERIODIC_RUNS = {"linkedin_feed": 0, "scan_gmail": 0, "scan_replies": 0}
+LAST_PERIODIC_RUNS = {
+    "linkedin_feed": 0,
+    "naukri_apply": 0,
+    "linkedin_apply": 0,
+    "scan_gmail": 0,
+    "scan_replies": 0,
+    "pec_referral": 0,
+}
 
 
 def add_log(msg: str):
@@ -181,7 +188,7 @@ def get_stats():
             pass
 
     now_ist = datetime.now(IST)
-    is_active_shift = 9 <= now_ist.hour < 19
+    is_active_shift = 9 <= now_ist.hour < 17
     now_ts = time.time()
     if now_ts - LAST_MEM_CHECK > 10:
         ram_val = get_tree_ram_mb()
@@ -230,7 +237,7 @@ def get_stats():
         "mumbai_incomplete_count": mumbai_incomplete_count,
         "naukri_boost": boost_status,
         "current_task": CURRENT_TASK,
-        "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
+        "scheduler_status": "Active (8h Shift 09:00 - 17:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
         "ist_time": now_ist.strftime("%H:%M:%S IST"),
         "ram_mb": CACHED_MEM_MB,
         "cloud_mode": is_cloud_low_mem(),
@@ -4242,12 +4249,15 @@ def execute_task(task_type):
             mgr = BrowserManager(profile_name="linkedin")
             try:
                 context, page = mgr.get_context_and_page(force_headless=True)
+                mgr.ensure_logged_in(page, timeout_sec=15)
                 config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
                     "target_roles": ["Analyst", "Associate Product Manager", "Product Manager"],
                     "location": "India",
                     "dry_run": False,
                     "limits": {"max_jobs_evaluated_per_run": 10, "max_easy_applies_per_run": 3, "max_easy_applies_per_day": 12}
                 })
+                if is_cloud_low_mem():
+                    config.setdefault("limits", {})["max_jobs_evaluated_per_run"] = 6
                 state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_job_ids": []})
                 scanner = JobScanner(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
                 res = scanner.run()
@@ -4261,10 +4271,11 @@ def execute_task(task_type):
                 mgr.close()
 
         elif task_type == "linkedin_feed":
-            add_log("🚀 Starting LinkedIn Feed Harvester (Target: 100+ Posts)...")
+            add_log("🚀 Starting LinkedIn For You Feed Harvester (/feed/foryou/, Target: 100+ Posts)...")
             mgr = BrowserManager(profile_name="linkedin")
             try:
                 context, page = mgr.get_context_and_page(force_headless=True)
+                mgr.ensure_logged_in(page, timeout_sec=15)
                 config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 100}})
                 state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
                 harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
@@ -4295,6 +4306,80 @@ def execute_task(task_type):
             meng = MumbaiOutreachEngine()
             res = meng.run_daily_acceptance_and_send(min_age_days=0, check_all_pending=True, send_immediately=False, log_cb=add_log)
             add_log(f"✅ Mumbai Daily Check finished: {res.get('added_to_sending_list', 0)} promoted to Sending List, {res.get('still_pending', 0)} still pending.")
+
+        elif task_type == "pec_referral":
+            state_path = os.path.join(DATA_DIR, "state.json")
+            state_obj = load_json_file(state_path, {})
+            now_ts = time.time()
+            cooldown_until = float(state_obj.get("pec_search_cooldown_until", 0) or 0)
+            if cooldown_until > now_ts:
+                rem_mins = int((cooldown_until - now_ts) / 60)
+                add_log(f"⏸️ [PEC REFERRAL] LinkedIn search limit cooldown active (~{rem_mins}m left). Skipping search cleanly.")
+            else:
+                add_log("🎓 [PEC REFERRAL] Probing whether LinkedIn Search is open before running PEC Alumni referrals...")
+                search_open = False
+                limit_reason = ""
+                mgr = BrowserManager(profile_name="linkedin")
+                try:
+                    context, page = mgr.get_context_and_page(force_headless=True)
+                    if not mgr.ensure_logged_in(page, timeout_sec=15):
+                        limit_reason = "LinkedIn authentication unavailable"
+                    else:
+                        try:
+                            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                        except Exception:
+                            pass
+                        try:
+                            resp = page.goto(
+                                "https://www.linkedin.com/search/results/people/?keywords=Punjab%20Engineering%20College",
+                                wait_until="domcontentloaded",
+                                timeout=25000,
+                            )
+                            time.sleep(2.0)
+                            cur_url = (page.url or "").lower()
+                            body_lower = (page.evaluate("() => (document.body && document.body.innerText ? document.body.innerText : '').slice(0, 3000)") or "").lower()
+                            status_code = resp.status if resp else 200
+                            if status_code in (429, 999) or any(k in cur_url for k in ("checkpoint", "uas/login", "authwall")):
+                                limit_reason = f"HTTP {status_code} / gate ({cur_url})"
+                            elif any(k in body_lower for k in (
+                                "commercial use limit",
+                                "monthly limit on profile searches",
+                                "you've reached the monthly limit",
+                                "reached the limit",
+                                "unlock unlimited search",
+                                "too many requests",
+                            )):
+                                limit_reason = "LinkedIn monthly/commercial search limit active"
+                            else:
+                                search_open = True
+                        except Exception as pe:
+                            limit_reason = f"Search probe exception: {pe}"
+                finally:
+                    mgr.close()
+
+                if not search_open:
+                    state_obj["pec_search_cooldown_until"] = time.time() + (4 * 3600)
+                    state_obj["pec_search_status"] = f"Blocked ({limit_reason})"
+                    save_json_file(state_path, state_obj)
+                    add_log(f"⏸️ [PEC REFERRAL] Search still restricted ({limit_reason}). Deferred 4h cleanly.")
+                else:
+                    state_obj["pec_search_cooldown_until"] = 0
+                    state_obj["pec_search_status"] = "Open"
+                    save_json_file(state_path, state_obj)
+                    add_log("✅ [PEC REFERRAL] LinkedIn Search is OPEN! Running PEC Alumni referral outreach & acceptance check...")
+                    meng = MumbaiOutreachEngine()
+                    pec_ids = [
+                        c.get("id") for c in meng.get_contacts()
+                        if c.get("is_pec_alumni") and c.get("workflow_stage") == "discovered"
+                    ]
+                    max_act = 3 if is_cloud_low_mem() else 6
+                    c_res = {"connections_sent": 0}
+                    if pec_ids:
+                        c_res = meng.run_connect_and_message_cycle(contact_ids=pec_ids[:max_act], max_connects=max_act, connect_only=True, log_cb=add_log)
+                    else:
+                        c_res = meng.run_connect_and_message_cycle(max_connects=max_act, connect_only=True, log_cb=add_log)
+                    f_res = meng.run_daily_acceptance_and_send(min_age_days=0, check_all_pending=True, send_immediately=True, log_cb=add_log)
+                    add_log(f"🎓 [PEC REFERRAL] Complete: connections_sent={c_res.get('connections_sent', 0)}, accepted_messaged={f_res.get('accepted_and_messaged', 0)}")
 
     except Exception as e:
         task_failed = True
@@ -4347,114 +4432,220 @@ def run_task(task_type):
     return jsonify({"message": msg, "queued": CURRENT_TASK.get("queued", [])})
 
 
-def autonomous_10h_scheduler():
-    """
-    Runs inside app.py as a lightweight background daemon thread.
-    Enforces the 10-hour daily recruiter shift (09:00 AM - 07:00 PM IST).
-    Features persistent catch-up milestones in data/daily_milestones.json.
-    """
-    logger.info("Starting Integrated Autonomous 10-Hour Shift Scheduler (09:00 - 19:00 IST)...")
-    milestone_file = os.path.join(DATA_DIR, "daily_milestones.json")
+MILESTONE_FILE = os.path.join(DATA_DIR, "daily_milestones.json")
+SHIFT_REPORT_FILE = os.path.join(DATA_DIR, "daily_shift_report.json")
 
-    def load_milestones():
-        if os.path.exists(milestone_file):
-            try:
-                with open(milestone_file, "r", encoding="utf-8") as f:
-                    return set(json.load(f))
-            except Exception:
-                return set()
-        return set()
 
-    def record_milestone(m_name):
-        completed = load_milestones()
-        completed.add(m_name)
+def _load_milestones() -> set:
+    if os.path.exists(MILESTONE_FILE):
         try:
-            with open(milestone_file, "w", encoding="utf-8") as f:
-                json.dump(list(completed)[-100:], f, indent=2)
+            with open(MILESTONE_FILE, "r", encoding="utf-8") as f:
+                return set(json.load(f))
         except Exception:
-            pass
+            return set()
+    return set()
 
-    def scheduled_job(task_name) -> bool:
-        now_ist = datetime.now(IST)
-        if not (9 <= now_ist.hour < 19):
-            logger.info(f"Outside 10-hour IST window ({now_ist.strftime('%H:%M')} IST). Skipping scheduled '{task_name}'.")
-            return False
+
+def _record_milestone(m_name: str):
+    completed = _load_milestones()
+    completed.add(m_name)
+    try:
+        with open(MILESTONE_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(completed)[-200:], f, indent=2)
+    except Exception:
+        pass
+
+
+def _system_load_ok() -> tuple:
+    """Enforces RAM and CPU load-management headroom before starting browser automation."""
+    cloud_mode = is_cloud_low_mem()
+    ram_limit = 405.0 if cloud_mode else 1400.0
+    ram_mb = wait_for_ram_cooldown(soft_limit_mb=min(ram_limit, 360.0 if cloud_mode else 900.0), max_wait_sec=2.0)
+    if ram_mb > ram_limit:
+        return False, f"RAM {ram_mb} MB exceeds ceiling ({ram_limit} MB)", ram_mb
+    try:
+        load1 = os.getloadavg()[0]
+        cpu_cnt = os.cpu_count() or 4
+        cpu_ceil = max(4.0, cpu_cnt * 1.35)
+        if not cloud_mode and load1 > cpu_ceil:
+            return False, f"CPU 1m load {load1:.2f} exceeds ceiling ({cpu_ceil:.2f})", ram_mb
+    except Exception:
+        pass
+    return True, "OK", ram_mb
+
+
+def _current_shift_slot(now_ist: datetime) -> str:
+    h = now_ist.hour
+    if 9 <= h < 11:
+        return "09:00-11:00 IST | Active Post Scrolling (/feed/foryou/ - 2h Block #1)"
+    if h == 11:
+        return "11:00-12:00 IST | Wait Feed #1: Naukri Headline + 1h Naukri Apply"
+    if h == 12:
+        return "12:00-13:00 IST | Wait Feed #1: 1h LinkedIn Easy Apply"
+    if 13 <= h < 15:
+        return "13:00-15:00 IST | Active Post Scrolling (/feed/foryou/ - 2h Block #2)"
+    if 15 <= h < 17:
+        return "15:00-17:00 IST | Wait Feed #2: PEC Referral (When Search Open) + Continuous Email Analysis"
+    return "Off-Shift (17:00-09:00 IST Standby)"
+
+
+def _write_daily_shift_report(now_ist: datetime):
+    try:
+        stats = get_stats()
+        state_obj = load_json_file(os.path.join(DATA_DIR, "state.json"), {})
+        report = {
+            "date": str(now_ist.date()),
+            "generated_at_ist": now_ist.strftime("%Y-%m-%d %H:%M:%S IST"),
+            "shift": "09:00 - 17:00 IST (8 Hours)",
+            "feed_posts_count": stats.get("feed_posts_count", 0),
+            "naukri_applied_today": stats.get("naukri_today", 0),
+            "naukri_boost": stats.get("naukri_boost", {}),
+            "linkedin_easy_apply_today": stats.get("linkedin_today", 0),
+            "email_intel_count": stats.get("email_intel_count", 0),
+            "pec_search_status": state_obj.get("pec_search_status", "Pending Check"),
+            "mumbai_incomplete_count": stats.get("mumbai_incomplete_count", 0),
+        }
+        save_json_file(SHIFT_REPORT_FILE, report)
+    except Exception as e:
+        logger.warning(f"Shift report save note: {e}")
+
+
+def _trigger_scheduled_job(task_name: str, source: str = "8h SHIFT") -> bool:
+    now_ist = datetime.now(IST)
+    if not (9 <= now_ist.hour < 17):
+        return False
+    load_ok, reason, ram_mb = _system_load_ok()
+    if not load_ok:
+        add_log(f"⏸️ [LOAD MANAGER] Deferred '{task_name}' ({reason}).")
+        return False
+    with TASK_LOCK:
         if CURRENT_TASK["running"]:
             return False
-        # Claim lock synchronously before spawning thread to prevent race conditions across milestones
         CURRENT_TASK["running"] = True
         CURRENT_TASK["name"] = task_name
         CURRENT_TASK["started_at"] = now_ist.strftime("%H:%M:%S")
-        add_log(f"⏰ [10h SHIFT SCHEDULER] Triggering '{task_name}' at {now_ist.strftime('%H:%M:%S')} IST")
+        add_log(f"⏰ [{source}] Triggering '{task_name}' at {now_ist.strftime('%H:%M:%S')} IST (RAM: {ram_mb} MB | Slot: {_current_shift_slot(now_ist)})")
         if task_name in LAST_PERIODIC_RUNS:
             LAST_PERIODIC_RUNS[task_name] = time.time()
-        t = threading.Thread(target=execute_task, args=(task_name,), daemon=True)
-        t.start()
+        threading.Thread(target=execute_task, args=(task_name,), daemon=True).start()
         return True
 
+
+def evaluate_8h_shift_tick(source: str = "8h SHIFT") -> dict:
+    """
+    Executes one scheduling decision for the 8-hour daily shift (09:00 - 17:00 IST):
+      - 09:00-11:00 IST (2h): Post Scrolling (/feed/foryou/) every 20m + email checks between batches
+      - 11:00-13:00 IST (2h wait from feed): Once-daily Naukri Headline Boost -> 1h Naukri Apply (11:00-12:00) -> 1h LinkedIn Easy Apply (12:00-13:00)
+      - 13:00-15:00 IST (2h): Post Scrolling (/feed/foryou/) again every 20m + email checks between batches
+      - 15:00-17:00 IST (2h wait from feed / rest of time): PEC Referral check (when search limit is open) + Continuous Email Thread Analysis & Replies
+    """
+    now_ist = datetime.now(IST)
+    today_str = str(now_ist.date())
+    h = now_ist.hour
+    now_ts = time.time()
+
+    if not (9 <= h < 17):
+        if h >= 17:
+            completed = _load_milestones()
+            shift_end_key = f"{today_str}_shift_end_8h"
+            if shift_end_key not in completed:
+                _record_milestone(shift_end_key)
+                _write_daily_shift_report(now_ist)
+                add_log("🌙 [8h SHIFT COMPLETE] 05:00 PM IST reached. End-of-day report saved; standby until 09:00 AM tomorrow.")
+        return {"triggered": None, "slot": _current_shift_slot(now_ist), "running": CURRENT_TASK["running"]}
+
+    if CURRENT_TASK["running"]:
+        return {"triggered": None, "slot": _current_shift_slot(now_ist), "running": True, "current": CURRENT_TASK["name"]}
+
+    completed = _load_milestones()
+    boost_key = f"{today_str}_naukri_boost"
+    triggered = None
+
+    # 1. Ideal Non-Feed Hours (11:00-13:00): Once-a-day Headline Boost + 1h Naukri Apply + 1h Easy Apply
+    if 11 <= h < 13:
+        if boost_key not in completed:
+            if _trigger_scheduled_job("naukri_boost", source):
+                _record_milestone(boost_key)
+                triggered = "naukri_boost"
+        elif h == 11 and (now_ts - LAST_PERIODIC_RUNS["naukri_apply"]) > (5 * 60):
+            if _trigger_scheduled_job("naukri_apply", source):
+                triggered = "naukri_apply"
+        elif h == 12 and (now_ts - LAST_PERIODIC_RUNS["linkedin_apply"]) > (5 * 60):
+            if _trigger_scheduled_job("linkedin_apply", source):
+                triggered = "linkedin_apply"
+
+    # 2. Active Feed Scrolling Windows (2h ON: 09:00-11:00, wait 2h, 2h ON: 13:00-15:00)
+    elif h in (9, 10, 13, 14):
+        if (now_ts - LAST_PERIODIC_RUNS["linkedin_feed"]) > (20 * 60):
+            if _trigger_scheduled_job("linkedin_feed", source):
+                triggered = "linkedin_feed"
+
+    # 3. Late Wait Window (15:00-17:00): Catch up headline boost if app started late + PEC Referral when Search is open
+    elif h in (15, 16):
+        if boost_key not in completed:
+            if _trigger_scheduled_job("naukri_boost", source):
+                _record_milestone(boost_key)
+                triggered = "naukri_boost"
+        elif (now_ts - LAST_PERIODIC_RUNS["pec_referral"]) > (90 * 60):
+            if _trigger_scheduled_job("pec_referral", source):
+                triggered = "pec_referral"
+
+    # 4. Rest-of-time within the 8h shift: Continuously analyze Email Threads & Inbox Replies
+    if not triggered and not CURRENT_TASK["running"]:
+        if (now_ts - LAST_PERIODIC_RUNS["scan_gmail"]) > (15 * 60):
+            if _trigger_scheduled_job("scan_gmail", source):
+                triggered = "scan_gmail"
+        elif (now_ts - LAST_PERIODIC_RUNS["scan_replies"]) > (45 * 60):
+            if _trigger_scheduled_job("scan_replies", source):
+                triggered = "scan_replies"
+
+    return {"triggered": triggered, "slot": _current_shift_slot(now_ist), "running": CURRENT_TASK["running"]}
+
+
+@app.route("/api/cron/tick", methods=["POST", "GET"])
+def api_cron_tick():
+    """Cron & external keep-alive endpoint to execute one load-checked 8-hour shift tick."""
+    res = evaluate_8h_shift_tick(source="CRON TICK")
+    return jsonify({"status": "ok", "ist_time": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST"), **res})
+
+
+@app.route("/api/shift/status", methods=["GET"])
+def api_shift_status():
+    """Returns current 8-hour shift slot, load metrics, PEC search-limit state, and end-of-day report."""
+    now_ist = datetime.now(IST)
+    load_ok, reason, ram_mb = _system_load_ok()
+    state_obj = load_json_file(os.path.join(DATA_DIR, "state.json"), {})
+    report = load_json_file(SHIFT_REPORT_FILE, {})
+    return jsonify({
+        "ist_time": now_ist.strftime("%Y-%m-%d %H:%M:%S IST"),
+        "active_shift": 9 <= now_ist.hour < 17,
+        "slot": _current_shift_slot(now_ist),
+        "load_ok": load_ok,
+        "load_reason": reason,
+        "ram_mb": ram_mb,
+        "pec_search_status": state_obj.get("pec_search_status", "Unknown"),
+        "pec_search_cooldown_until": state_obj.get("pec_search_cooldown_until", 0),
+        "current_task": CURRENT_TASK,
+        "last_report": report,
+    })
+
+
+def autonomous_8h_scheduler():
+    """
+    Runs inside app.py as a lightweight background daemon thread.
+    Enforces the 8-hour daily shift (09:00 AM - 05:00 PM IST).
+    """
+    logger.info("Starting Integrated Autonomous 8-Hour Shift Scheduler (09:00 - 17:00 IST)...")
     while True:
         try:
-            now_ist = datetime.now(IST)
-            today_str = str(now_ist.date())
-            current_hour = now_ist.hour
-            current_min = now_ist.minute
-            now_ts = time.time()
-
-            if 9 <= current_hour < 19 and not CURRENT_TASK["running"]:
-                completed = load_milestones()
-
-                boost_key = f"{today_str}_naukri_boost"
-                apply_am_key = f"{today_str}_naukri_apply_am"
-                apply_pm_key = f"{today_str}_naukri_apply_pm"
-                mumbai_2d_key = f"{today_str}_mumbai_followup_2d"
-                gmail_pm_key = f"{today_str}_gmail_pm"
-
-                # Strict priority order: Daily Naukri milestones first, only recorded if actually launched!
-                if boost_key not in completed and current_hour >= 9:
-                    if scheduled_job("naukri_boost"):
-                        record_milestone(boost_key)
-
-                elif apply_am_key not in completed and (current_hour > 9 or (current_hour == 9 and current_min >= 30)):
-                    if scheduled_job("naukri_apply"):
-                        record_milestone(apply_am_key)
-
-                elif apply_pm_key not in completed and (current_hour > 15 or (current_hour == 15 and current_min >= 30)):
-                    if scheduled_job("naukri_apply"):
-                        record_milestone(apply_pm_key)
-
-                elif mumbai_2d_key not in completed and current_hour >= 11:
-                    if scheduled_job("mumbai_followup"):
-                        record_milestone(mumbai_2d_key)
-
-                elif gmail_pm_key not in completed and (current_hour > 18 or (current_hour == 18 and current_min >= 45)):
-                    if scheduled_job("scan_gmail"):
-                        record_milestone(gmail_pm_key)
-
-                # Periodic Tasks only run once daily milestones due right now are caught up:
-                elif (now_ts - LAST_PERIODIC_RUNS["linkedin_feed"]) > (60 * 60):
-                    scheduled_job("linkedin_feed")
-
-                elif (now_ts - LAST_PERIODIC_RUNS["scan_gmail"]) > (45 * 60):
-                    scheduled_job("scan_gmail")
-
-                elif (now_ts - LAST_PERIODIC_RUNS["scan_replies"]) > (60 * 60):
-                    scheduled_job("scan_replies")
-
-            elif current_hour >= 19:
-                shift_end_key = f"{today_str}_shift_end"
-                completed = load_milestones()
-                if shift_end_key not in completed:
-                    record_milestone(shift_end_key)
-                    add_log("🌙 [10h SHIFT COMPLETE] 07:00 PM IST reached. Standby until 09:00 AM tomorrow.")
-
+            evaluate_8h_shift_tick(source="8h SHIFT SCHEDULER")
         except Exception as e:
             logger.error(f"Error in autonomous scheduler: {e}")
-
         time.sleep(30)
 
 
-# Launch autonomous scheduler thread immediately on server startup
-sched_thread = threading.Thread(target=autonomous_10h_scheduler, daemon=True)
+# Launch autonomous 8h scheduler thread immediately on server startup
+sched_thread = threading.Thread(target=autonomous_8h_scheduler, daemon=True)
 sched_thread.start()
 
 

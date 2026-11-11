@@ -11,15 +11,15 @@
   "location": "India",
   "operating_hours": {
     "enabled": true,
-    "active_hours_per_day": 10,
+    "active_hours_per_day": 8,
     "start_time_ist": "09:00",
-    "end_time_ist": "19:00",
+    "end_time_ist": "17:00",
     "timezone": "Asia/Kolkata (IST)"
   },
   "dry_run": false,
   "test_mode": false,
   "limits": {
-    "max_feed_posts_per_run": 100,
+    "max_feed_posts_per_run": 60,
     "max_jobs_evaluated_per_run": 50,
     "max_easy_applies_per_run": 25,
     "max_easy_applies_per_day": 150,

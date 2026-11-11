@@ -15,7 +15,7 @@ import urllib.parse
 from datetime import datetime
 from urllib.parse import quote_plus
 
-from browser_session import BrowserManager, human_delay
+from browser_session import BrowserManager, human_delay, smooth_scroll
 from referral_engine import ReferralEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -727,8 +727,9 @@ class MumbaiOutreachEngine:
         newly_discovered = []
         context, page = self.browser_mgr.get_context_and_page(force_headless=True)
         try:
+            # Keep images & fonts enabled (only abort heavy video/media) so LinkedIn doesn't flag stripped bot fingerprints
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
 
@@ -759,8 +760,13 @@ class MumbaiOutreachEngine:
                         if not purl or purl in contacts_by_url:
                             continue
                         headline = p.get("headline", "")
-                        kw_hit = _match_keyword(headline, kw_list) or default_kw
-                        is_pec = force_pec or _is_pec_alumni_text(headline)
+                        full_text = p.get("full_card_text", headline)
+                        # Guard against mutual-connection / navbar bleed-through
+                        if "0 notifications" in full_text or "skip to search" in full_text.lower():
+                            continue
+                        kw_hit = _match_keyword(full_text, kw_list) or default_kw
+                        # Only mark PEC Alumni if scoped company/people PEC search OR card text explicitly proves PEC Chandigarh
+                        is_pec = _is_pec_alumni_text(full_text) or (force_pec and comp_name.lower().split()[0] in full_text.lower())
                         is_1st = p.get("is_connection", False) or p.get("degree") == "1st"
                         rec = {
                             "id": str(abs(hash(purl))),
@@ -771,7 +777,7 @@ class MumbaiOutreachEngine:
                             "first_name": p.get("name", "there").split()[0],
                             "headline": headline,
                             "profile_url": purl,
-                            "matched_keyword": kw_hit,
+                            "matched_keyword": "PEC Alumni" if is_pec and kw_hit == default_kw else kw_hit,
                             "category": "pec_alumni" if is_pec else "other",
                             "is_pec_alumni": is_pec,
                             "degree": "1st" if is_1st else p.get("degree", "2nd/3rd"),
@@ -795,7 +801,7 @@ class MumbaiOutreachEngine:
                     nonlocal auth_failed, rate_limited, pages_loaded
                     try:
                         resp = page.goto(target_url, wait_until="domcontentloaded")
-                        human_delay(3.0, 4.6)
+                        human_delay(4.0, 6.2)
                         if resp and resp.status in (429, 999):
                             log(f"⚠️ LinkedIn returned HTTP {resp.status} (rate limit/block). Stopping batch cleanly and saving any discovered contacts.")
                             rate_limited = True
@@ -805,6 +811,10 @@ class MumbaiOutreachEngine:
                             self.browser_mgr.mark_session_expired("search_redirect")
                             auth_failed = True
                             return False
+                        try:
+                            smooth_scroll(page, total_pixels=900, steps=2)
+                        except Exception:
+                            pass
                         pages_loaded += 1
                         return True
                     except Exception as e:
@@ -821,46 +831,37 @@ class MumbaiOutreachEngine:
                         logger.debug(f"Search navigation warning for {target_url}: {e}")
                         return False
 
-                # Pass A: Search PEC Chandigarh alumni at this company
-                pec_urls_to_check = [
-                    f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus('Punjab Engineering College')}",
-                    f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(comp_name + ' Punjab Engineering College')}",
-                    f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(comp_name + ' PEC Chandigarh')}",
-                ]
-                for search_url in pec_urls_to_check:
-                    if auth_failed or rate_limited or company_found >= limit_per_company:
-                        break
-                    if _goto_and_check(search_url):
-                        try:
-                            raw_people = self.referral_engine._extract_search_results(page, comp_name, "PEC Alumni")
-                            _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
-                        except Exception as e:
-                            logger.debug(f"PEC extraction error at {comp_name}: {e}")
+                # Pass A: Company-scoped PEC Chandigarh alumni check (1 low-footprint request)
+                pec_company_url = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus('Punjab Engineering College')}"
+                if _goto_and_check(pec_company_url):
+                    try:
+                        raw_people = self.referral_engine._extract_people_from_page(page, comp_name, is_alumni=True)
+                        _ingest_people(raw_people, default_kw="PEC Alumni", force_pec=True)
+                    except Exception as e:
+                        logger.debug(f"PEC extraction error at {comp_name}: {e}")
 
                 if auth_failed or rate_limited:
                     break
 
-                # Pass B: Paginated search across Target Keywords until min_contacts_per_company (30+) reached
-                for kw in kw_list:
-                    if company_found >= min_contacts_per_company or auth_failed or rate_limited:
+                # Pass B: Compact Boolean OR People Search (3-4 pages total instead of 15+ rapid searches)
+                or_terms = " OR ".join([f'"{k}"' if " " in k else k for k in kw_list[:6]])
+                bool_query = f'"{comp_name}" ({or_terms})'
+                for pg in range(1, 5):  # Up to 4 paginated pages (~40 targeted people)
+                    if company_found >= limit_per_company or company_found >= min_contacts_per_company or auth_failed or rate_limited:
                         break
-                    for pg in range(1, 4):  # Pages 1..3 per keyword
-                        if company_found >= limit_per_company or company_found >= min_contacts_per_company or auth_failed or rate_limited:
-                            break
-                        query = f"{comp_name} {kw} Mumbai" if pg == 1 else f"{comp_name} {kw}"
-                        search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(query)}&page={pg}"
-                        if _goto_and_check(search_url):
-                            try:
-                                raw_people = self.referral_engine._extract_search_results(page, comp_name, kw)
-                                added_pg = _ingest_people(raw_people, default_kw=kw, force_pec=False)
-                                if not raw_people or (added_pg == 0 and pg >= 2):
-                                    break
-                            except Exception as e:
-                                logger.debug(f"Keyword '{kw}' pg {pg} extraction error at {comp_name}: {e}")
+                    search_url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(bool_query)}&page={pg}"
+                    if _goto_and_check(search_url):
+                        try:
+                            raw_people = self.referral_engine._extract_search_results(page, comp_name, "Target")
+                            added_pg = _ingest_people(raw_people, default_kw="Target", force_pec=False)
+                            if not raw_people or (added_pg == 0 and pg >= 2):
+                                break
+                        except Exception as e:
+                            logger.debug(f"Boolean search pg {pg} extraction error at {comp_name}: {e}")
 
-                # Pass C: Fallback company /people/ keyword pages if still below 30+
+                # Pass C: Fallback company /people/ page (top 2 keywords) ONLY if still < 30
                 if not auth_failed and not rate_limited and company_found < min_contacts_per_company:
-                    for kw in kw_list[:3]:
+                    for kw in kw_list[:2]:
                         if company_found >= min_contacts_per_company or auth_failed or rate_limited:
                             break
                         curl = f"https://www.linkedin.com/company/{comp_slug}/people/?keywords={quote_plus(kw)}"
@@ -883,7 +884,7 @@ class MumbaiOutreachEngine:
 
             pec_count = sum(1 for c in newly_discovered if c["is_pec_alumni"])
             other_count = len(newly_discovered) - pec_count
-            status_str = "Rate Limited (Saved Partial)" if rate_limited else "Success"
+            status_str = "Auth Required (Saved Partial)" if auth_failed else ("Rate Limited (Saved Partial)" if rate_limited else "Success")
             log(f"Contact discovery finished ({status_str}): {len(newly_discovered)} new ({pec_count} PEC Alumni, {other_count} Other).")
             return {
                 "status": status_str,
@@ -969,8 +970,9 @@ class MumbaiOutreachEngine:
         messages_sent = 0
 
         try:
+            # Keep images & fonts enabled (only abort heavy video/media) so LinkedIn doesn't flag stripped bot fingerprints
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
 
@@ -1097,8 +1099,9 @@ class MumbaiOutreachEngine:
         context, page = self.browser_mgr.get_context_and_page(force_headless=True)
         messages_sent = 0
         try:
+            # Keep images & fonts enabled (only abort heavy video/media) so LinkedIn doesn't flag stripped bot fingerprints
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
 
@@ -1198,8 +1201,9 @@ class MumbaiOutreachEngine:
         still_pending_count = 0
 
         try:
+            # Keep images & fonts enabled (only abort heavy video/media) so LinkedIn doesn't flag stripped bot fingerprints
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "media", "font"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
             except Exception:
                 pass
 

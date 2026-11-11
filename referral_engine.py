@@ -116,68 +116,97 @@ class ReferralEngine:
         finally:
             self.browser_mgr.close()
 
-    def _extract_people_from_page(self, page, company: str, is_alumni: bool = False) -> list:
-        people = page.evaluate('''() => {
+    @staticmethod
+    def _extract_cards_js() -> str:
+        return '''() => {
             const results = [];
             const seen = new Set();
-            document.querySelectorAll("li, div.org-people-profile-card, div").forEach(c => {
-                const link = c.querySelector("a[href*='/in/']");
-                if (link && link.innerText) {
-                    const rawName = link.innerText.trim().split('\\n')[0];
-                    const href = link.href.split('?')[0];
-                    if (!seen.has(href) && rawName.length > 2 && rawName.length < 50 && !rawName.toLowerCase().includes('view') && !rawName.toLowerCase().includes('linkedin')) {
-                        seen.add(href);
-                        const text = c.innerText ? c.innerText.replace(/\\n+/g, ' ') : '';
-                        results.push({
-                            name: rawName,
-                            profile_url: href,
-                            headline: text.substring(0, 140)
-                        });
-                    }
+            const mainEl = document.querySelector('main') || document.body;
+            const cardSelectors = [
+                'div[data-view-name="search-entity-result-universal-template"]',
+                'li.reusable-search__result-container',
+                'div.entity-result',
+                'li.org-people-profile-card',
+                'div.org-people-profile-card',
+                '[data-chameleon-result-urn]',
+                'div.scaffold-finite-scroll__content li'
+            ];
+            let cards = [];
+            for (const sel of cardSelectors) {
+                const found = Array.from(mainEl.querySelectorAll(sel)).filter(el => !el.closest('aside, nav, header'));
+                if (found.length > 0) {
+                    cards = found;
+                    break;
                 }
+            }
+            if (cards.length === 0) {
+                cards = Array.from(mainEl.querySelectorAll('li, [role="listitem"]'))
+                    .filter(el => !el.closest('aside, nav, header') && el.querySelector("a[href*='/in/']"));
+            }
+
+            cards.forEach(card => {
+                const allInLinks = Array.from(card.querySelectorAll("a[href*='/in/']")).filter(a => {
+                    if (a.closest('.entity-result__insights, .reusable-search-simple-insight, .member-insights')) return false;
+                    const txt = (a.innerText || '').trim();
+                    if (!txt || txt.length < 3 || txt.length > 65) return false;
+                    const lower = txt.toLowerCase();
+                    if (
+                        lower.includes('mutual connection') ||
+                        lower.includes('works here') ||
+                        lower.includes('view ') ||
+                        lower.includes('linkedin member') ||
+                        lower.includes('skip to')
+                    ) return false;
+                    return true;
+                });
+                const link = allInLinks.find(a => a.querySelector('span[aria-hidden="true"]')) || allInLinks[0];
+                if (!link) return;
+
+                const spanName = link.querySelector('span[aria-hidden="true"]');
+                const rawName = ((spanName ? spanName.innerText : link.innerText) || '')
+                    .trim().split('\\n')[0].replace(/•.*$/, '').trim();
+                const href = link.href.split('?')[0].replace(/\\/+$/, '');
+                if (!href || seen.has(href) || rawName.length < 3 || rawName.length > 55) return;
+
+                const cardText = (card.innerText || '').replace(/\\s+/g, ' ').trim();
+                if (!cardText || cardText.includes('Skip to search') || cardText.includes('0 notifications')) return;
+
+                const subEl = card.querySelector('.entity-result__primary-subtitle, .artdeco-entity-lockup__subtitle, .t-14.t-black.t-normal');
+                const sumEl = card.querySelector('.entity-result__summary, .entity-result__secondary-subtitle');
+                const h1 = subEl ? (subEl.innerText || '').replace(/\\s+/g, ' ').trim() : '';
+                const h2 = sumEl ? (sumEl.innerText || '').replace(/\\s+/g, ' ').trim() : '';
+                const headline = [h1, h2].filter(Boolean).join(' · ') || cardText.substring(0, 160);
+
+                let degree = '2nd/3rd';
+                if (cardText.includes('• 1st') || cardText.includes('1st degree')) degree = '1st';
+                else if (cardText.includes('• 2nd')) degree = '2nd';
+                else if (cardText.includes('• 3rd')) degree = '3rd';
+
+                seen.add(href);
+                results.push({
+                    name: rawName,
+                    profile_url: href,
+                    headline: headline.substring(0, 220),
+                    full_card_text: cardText.substring(0, 400),
+                    degree: degree,
+                    is_connection: degree === '1st'
+                });
             });
             return results;
-        }''')
+        }'''
 
+    def _extract_people_from_page(self, page, company: str, is_alumni: bool = False) -> list:
+        people = page.evaluate(self._extract_cards_js())
         cleaned = []
         for p in people:
             p["company"] = company
             p["is_alumni"] = is_alumni
-            p["is_connection"] = False
-            p["degree"] = "PEC Alumni" if is_alumni else "2nd/3rd"
+            p["degree"] = "PEC Alumni" if is_alumni else p.get("degree", "2nd/3rd")
             cleaned.append(p)
         return cleaned
 
     def _extract_search_results(self, page, company: str, role: str) -> list:
-        people = page.evaluate('''() => {
-            const results = [];
-            const seen = new Set();
-            document.querySelectorAll("li, div").forEach(c => {
-                const link = c.querySelector("a[href*='/in/']");
-                if (link && link.innerText) {
-                    const rawName = link.innerText.trim().split('\\n')[0];
-                    const href = link.href.split('?')[0];
-                    if (!seen.has(href) && rawName.length > 2 && rawName.length < 50 && !rawName.toLowerCase().includes('view') && !rawName.toLowerCase().includes('linkedin')) {
-                        seen.add(href);
-                        const text = c.innerText ? c.innerText.replace(/\\n+/g, ' ') : '';
-                        let degree = '2nd/3rd';
-                        if (text.includes('• 1st') || text.includes('1st degree')) degree = '1st';
-                        else if (text.includes('• 2nd')) degree = '2nd';
-                        else if (text.includes('• 3rd')) degree = '3rd';
-
-                        results.push({
-                            name: rawName,
-                            profile_url: href,
-                            headline: text.substring(0, 140),
-                            degree: degree,
-                            is_connection: degree === '1st'
-                        });
-                    }
-                }
-            });
-            return results;
-        }''')
-
+        people = page.evaluate(self._extract_cards_js())
         cleaned = []
         for p in people:
             p["company"] = company

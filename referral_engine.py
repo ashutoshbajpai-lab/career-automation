@@ -370,7 +370,10 @@ class ReferralEngine:
             if connect_btn.count() == 0:
                 more_btn = hero.locator("button, a").filter(has_text=re.compile(r"^\s*More\s*$")).locator("visible=true").first
                 if more_btn.count() == 0:
-                    more_btn = hero.locator("button[aria-label='More actions']").locator("visible=true").first
+                    more_btn = hero.locator(
+                        "button[aria-label*='More' i], button[aria-label*='actions' i], button[aria-label*='options' i], "
+                        "button:has(svg[id*='overflow' i]), button:has(svg[data-test-icon*='overflow' i])"
+                    ).locator("visible=true").first
                 if more_btn.count() > 0:
                     more_btn.click(timeout=5000)
                     human_delay(0.8, 1.4)

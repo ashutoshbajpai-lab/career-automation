@@ -31,16 +31,30 @@ FORM_DOMAINS = [
 ]
 
 STRONG_HIRING_REGEX = re.compile(
+    r"(?:"
+    r"#(?:hiringnow|wearehiring|nowhiring|jobopening|jobalert|hiringalert|careeropportunity|"
+    r"immediatehiring|recruitment|talentacquisition|openforroles|jobopportunity|joinourteam|hiring)\b|"
     r"\b(?:"
-    r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|looking to hire|"
-    r"onboard(?:ing)?\b|bring(?:ing)?\s+(?:someone\s+|folks\s+|talent\s+)?on\s*board|expanding our team|growing our team|adding to our team|"
+    r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|active hiring|"
+    r"direct hire|mass hiring|bulk hiring|fast[- ]?track hiring|looking to hire|"
+    r"hiring alert|job alert|immediate opening|urgent requirement|critical role|hot opportunity|"
+    r"career opportunity|multiple openings|growing team|team expansion|expanding our team|we are growing|"
+    r"scaling up|adding to (?:the|our) team|join our team|"
+    r"quick joiner(?: needed)?|immediate joiner(?: preferred)?|immediate onboarding|"
+    r"walk[- ]?in interview|interested candidates|submit application|email your resume|"
+    r"onboard(?:ing)?|bring(?:ing)?\s+(?:someone\s+|folks\s+|talent\s+)?on\s*board|"
     r"hiring\s*[:\-–]|hiring\s+(?:a|an|for)\b|seeking\s+(?:a|an)\b|recruiting\b|"
     r"looking to join\b.{0,50}\b(?:startup|team|company)\b|"
-    r"looking for\b.{0,75}\b(?:interns?|trainees?|associates?|analysts?|managers?|heads?|leads?|sales|executives?|specialists?|coordinators?|consultants?|strategists?|marketers?|recruiters?|designers?|professionals?|candidates?|talent|folks|people|team members?|founder'?s office|bizops|operations?|marketing|growth|partnerships?|finance|hr|content)\b|"
-    r"join our team|open role|open position|job opening|openings? for|vacanc(?:y|ies)|recruiting for|"
+    r"looking for\b.{0,80}\b(?:interns?|trainees?|freshers?|associates?|juniors?|analysts?|managers?|heads?|leads?|sales|executives?|specialists?|coordinators?|consultants?|strategists?|marketers?|recruiters?|designers?|professionals?|candidates?|talent|folks|people|team members?|founder['’]?s office|founders office|bizops|operations?|marketing|growth|partnerships?|finance|hr|content)\b|"
+    r"open role|open position|job opening|openings? for|vacanc(?:y|ies)|recruiting for|"
     r"share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume)|"
     r"reach out at|interested candidates please apply|application form in the comments"
-    r")",
+    r"))",
+    re.IGNORECASE,
+)
+
+HIRING_HASHTAG_SOFT_REGEX = re.compile(
+    r"#(?:jobs|careers|jobsearch|remotejobs|hybridwork|fulltimejob)\b",
     re.IGNORECASE,
 )
 
@@ -49,7 +63,7 @@ NON_TECH_ROLE_REGEX = re.compile(
     r"non[- ]?tech|product|apm|analytics|analyst|business|bizops|strategy|strategic|operations|ops|"
     r"marketing|trade marketing|brand|growth|performance marketing|digital marketing|content|copywriter|pr|communications|"
     r"sales|b2b|inside sales|business development|\bbd\b|partnerships?|account manager|client|customer success|crm|"
-    r"founder'?s office|chief of staff|management trainee|trainee|generalist|program manager|project manager|"
+    r"founder['’]?s office|founders office|chief of staff|management trainee|trainee|fresher|junior|entry[- ]?level|associate|executive|generalist|program manager|project manager|"
     r"finance|financial|accounting|audit|investment|venture|vc|private equity|equity research|consulting|consultant|"
     r"hr|human resources|talent acquisition|\bta\b|recruiter|recruiting|people ops|staffing|"
     r"supply chain|logistics|procurement|category|merchandising|retail|e-?commerce|"
@@ -81,16 +95,23 @@ NON_HIRING_NOISE_REGEX = re.compile(
 def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_links: list, comment_links: list) -> tuple:
     """
     Strictly verifies that a LinkedIn feed post is an active hiring post
-    across ALL non-tech roles (Sales, Marketing, Ops, Strategy, Finance, HR, Product,
-    Analytics, BizOps, BD, Founder's Office, Trainee/Intern, etc.) plus Product/Design,
-    skipping pure software-coding-only postings and non-hiring commentary.
+    across ALL non-tech roles and hiring hashtags/phrases (Hiring, Hiring Alert,
+    Expanding/Growing Team, Immediate Onboarding, Walk-in Interview, Founder's Office,
+    Fresher/Associate/Junior/Analyst/Executive, etc.), filtering out pure coding-only
+    roles and non-hiring chatter.
     """
     low = (text or "").lower()
     has_strong_hiring = bool(STRONG_HIRING_REGEX.search(low))
-    if not has_strong_hiring:
+    has_soft_hashtag = bool(HIRING_HASHTAG_SOFT_REGEX.search(low)) and bool(
+        emails or form_links or external_links or comment_links
+    )
+    if not (has_strong_hiring or has_soft_hashtag):
         return False, []
 
-    if NON_HIRING_NOISE_REGEX.search(low) and not re.search(r"\b(we['’]?re hiring|we are hiring|hiring\s*:|apply here|share (?:your )?(?:cv|resume))\b", low):
+    if NON_HIRING_NOISE_REGEX.search(low) and not re.search(
+        r"(?:\b(?:we['’]?re hiring|we are hiring|hiring\s*:|apply here|submit application|email your resume|share (?:your )?(?:cv|resume))\b|#(wearehiring|hiringnow|nowhiring)\b)",
+        low,
+    ):
         return False, []
 
     has_non_tech = bool(NON_TECH_ROLE_REGEX.search(low))
@@ -104,7 +125,9 @@ def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_l
         or external_links
         or comment_links
         or re.search(
-            r"\b(dm me|send dm|message me|ping me|in the comments|comment below|comment ['\"]?interested|reach out|apply here|fill the form|link in bio|share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume))\b",
+            r"\b(dm me|send dm|message me|ping me|in the comments|comment below|comment ['\"]?interested|"
+            r"reach out|apply here|apply now|apply today|apply via|submit application|fill the form|link in bio|"
+            r"walk[- ]?in interview|email your resume|share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume))\b",
             low,
         )
     )
@@ -112,7 +135,7 @@ def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_l
         return False, []
 
     tags = []
-    has_junior = any(k in low for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst", "trainee"])
+    has_junior = any(k in low for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "entry-level", "graduate", "junior", "associate", "analyst", "trainee", "founder's office", "founder’s office", "founders office"])
     has_senior = any(k in low for k in ["5+ years", "6+ years", "7+ years", "8+ years", "10+ years", "head –", "head -", "director", "vp"])
     if has_junior:
         tags.append("Recruiting (0-3 Yrs)")
@@ -123,12 +146,23 @@ def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_l
 
     if has_non_tech:
         tags.append("Non-Tech Role")
+    if any(k in low for k in ["hybrid", "#hybridwork"]):
+        tags.append("Hybrid")
+    elif any(k in low for k in ["remote", "#remotejobs"]):
+        tags.append("Remote")
+    elif any(k in low for k in ["on-site", "onsite", "in-office", "in office"]):
+        tags.append("On-Site")
+    if "pan-india" in low or "pan india" in low:
+        tags.append("Pan-India")
+
     if emails:
         tags.append("Direct Email")
-    if form_links or comment_links or "comments" in low:
+    if form_links or comment_links or "comments" in low or "submit application" in low:
         tags.append("Apply Link / Form")
     elif "dm me" in low or "message me" in low:
         tags.append("DM Hiring Lead")
+    elif "walk-in" in low or "walk in" in low:
+        tags.append("Walk-In Interview")
     return True, tags
 
 
@@ -197,6 +231,7 @@ def extract_job_role(description: str) -> str:
         m = re.search(pat, description, re.IGNORECASE)
         if m:
             role = re.sub(r"\s+", " ", m.group(1)).strip(" :-–|•.,!?\t")
+            role = re.sub(r"^(?:a|an|the)\s+", "", role, flags=re.IGNORECASE)
             # Trim trailing filler clauses
             role = re.split(r"\s+(?:for \d|based in|at [A-Z]|to drive|to join|with \d)", role, maxsplit=1)[0].strip(" :-–|•.,")
             if 3 <= len(role) <= 85:

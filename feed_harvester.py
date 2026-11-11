@@ -33,7 +33,8 @@ FORM_DOMAINS = [
 STRONG_HIRING_REGEX = re.compile(
     r"\b(?:"
     r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|looking to hire|"
-    r"hiring\s*[:\-–]|hiring\s+(?:a|an|for)\b|seeking\s+(?:a|an)\b|"
+    r"onboard(?:ing)?\b|bring(?:ing)?\s+(?:someone\s+|folks\s+|talent\s+)?on\s*board|expanding our team|growing our team|adding to our team|"
+    r"hiring\s*[:\-–]|hiring\s+(?:a|an|for)\b|seeking\s+(?:a|an)\b|recruiting\b|"
     r"looking to join\b.{0,50}\b(?:startup|team|company)\b|"
     r"looking for\b.{0,75}\b(?:interns?|trainees?|associates?|analysts?|managers?|heads?|leads?|sales|executives?|specialists?|coordinators?|consultants?|strategists?|marketers?|recruiters?|designers?|professionals?|candidates?|talent|folks|people|team members?|founder'?s office|bizops|operations?|marketing|growth|partnerships?|finance|hr|content)\b|"
     r"join our team|open role|open position|job opening|openings? for|vacanc(?:y|ies)|recruiting for|"
@@ -187,7 +188,7 @@ def extract_job_role(description: str) -> str:
         return "Hiring Opportunity"
     patterns = [
         r"(?:we(?:'re| are)\s+hiring|now hiring|urgently hiring|hiring)\s*[:\-–]\s*([^\n|•.]{3,85})",
-        r"(?:we(?:'re| are)\s+hiring(?:\s+for)?(?:\s+a|\s+an)?)\s+([^\n.!?]{3,75})",
+        r"(?:looking to onboard|onboarding|bring(?:ing)?\s+on\s*board|we(?:'re| are)\s+hiring(?:\s+for)?(?:\s+a|\s+an)?)\s+([^\n.!?]{3,75})",
         r"(?:looking for|seeking)\s+(?:an?\s+)?([^\n.!?]{3,75}?\b(?:interns?|associates?|analysts?|managers?|engineers?|developers?|designers?|heads?|leads?|sales|executives?|specialists?|consultants?)\b[^\n.!?]{0,25})",
         r"(?:role|position|opening|vacancy)\s*[:\-–]\s*([^\n|•]{3,80})",
         r"looking to join an early stage\s+([^\n?.!]{3,75})",
@@ -243,12 +244,23 @@ class FeedHarvester:
             pass
 
         feed_url = "https://www.linkedin.com/feed/foryou/"
-        self._log(f"Navigating to LinkedIn For You feed ({feed_url})...")
+        self._log(f"Opening LinkedIn Home → For You feed ({feed_url})...")
         nav_ok = False
         try:
-            resp = self.page.goto(feed_url, wait_until="domcontentloaded", timeout=35000)
-            if not resp or resp.status != 429:
-                nav_ok = True
+            # Click navbar Home tab if already on a signed-in LinkedIn page, then ensure /feed/foryou/
+            if "linkedin.com" in (self.page.url or "").lower():
+                home_tab = self.page.locator("header nav a[href*='/feed'], nav a:has-text('Home')").locator("visible=true").first
+                if home_tab.count() > 0:
+                    try:
+                        home_tab.click(timeout=5000)
+                        human_delay(1.5, 2.5)
+                        nav_ok = True
+                    except Exception:
+                        pass
+            if "/feed/foryou" not in (self.page.url or "").lower():
+                resp = self.page.goto(feed_url, wait_until="domcontentloaded", timeout=35000)
+                if not resp or resp.status != 429:
+                    nav_ok = True
         except Exception as e:
             self._log(f"Navigation fallback: {e}")
             if "ERR_TOO_MANY_REDIRECTS" not in str(e):

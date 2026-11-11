@@ -62,24 +62,38 @@ class FeedHarvester:
 
     def run(self) -> list:
         self._log("Navigating to LinkedIn feed (https://www.linkedin.com/feed/)...")
+        nav_ok = False
         try:
-            self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=35000)
+            resp = self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=35000)
+            if not resp or resp.status != 429:
+                nav_ok = True
         except Exception as e:
             self._log(f"Navigation fallback: {e}")
-            try:
-                self.page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=20000)
-            except Exception:
-                pass
+            if "ERR_TOO_MANY_REDIRECTS" not in str(e):
+                try:
+                    self.page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=20000)
+                    nav_ok = True
+                except Exception:
+                    pass
         human_delay(2.0, 3.0)
 
-        current_url = self.page.url
-        current_title = self.page.title()
+        current_url = (self.page.url or "").lower()
+        try:
+            current_title = self.page.title()
+        except Exception:
+            current_title = "Redirecting / Unavailable"
         self._log(f"Arrived at LinkedIn. Page Title: '{current_title}' | URL: {current_url}")
 
-        # Check if login or checkpoint
-        if "login" in current_url or "checkpoint" in current_url:
-            self._log(f"⚠️ LinkedIn requires session update: redirected to {current_url}")
-            self._log("🔑 TIP: Paste your fresh 'li_at' cookie in the dashboard header (click key icon) for direct feed outreach.")
+        # Check if login, checkpoint, redirect loop, or blank error page -> use public guest jobs fallback
+        if (
+            not nav_ok
+            or not current_url
+            or current_url.startswith("about:")
+            or current_url.startswith("chrome-error")
+            or any(k in current_url for k in ("login", "checkpoint", "authwall", "signup"))
+        ):
+            self._log(f"⚠️ LinkedIn feed unavailable ({current_url or 'redirect/error'}).")
+            self._log("🔑 TIP: Click 'LinkedIn Auth' in the dashboard header to update your session cookie.")
             self._log("🌐 Activating Instant Public Jobs Engine (Harvesting 0-2 Yrs Analyst & PM Roles across India)...")
             return self._harvest_public_guest_jobs()
 

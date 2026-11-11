@@ -41,6 +41,10 @@ class EmailTracker:
             page.goto("https://mail.google.com/mail/u/0/#inbox", wait_until="domcontentloaded")
             human_delay(5.0, 6.5)
 
+            if any(x in (page.url or "").lower() for x in ("accounts.google.com", "signin", "ServiceLogin".lower())):
+                logger.warning("Gmail session requires sign-in; preserving previously saved email intelligence.")
+                return self.get_saved_intel()
+
             # Extract all inbox rows
             raw_emails = page.evaluate('''() => {
                 const rows = Array.from(document.querySelectorAll('tr[role="row"], tr.zA'));
@@ -60,6 +64,10 @@ class EmailTracker:
             }''')
 
             logger.info(f"Extracted {len(raw_emails)} total email rows from primary inbox.")
+            if not raw_emails:
+                logger.info("No email rows loaded from Gmail DOM; preserving existing saved intelligence.")
+                return self.get_saved_intel()
+
             processed = self._process_and_categorize(raw_emails)
 
             with open(EMAIL_INTEL_JSON, "w", encoding="utf-8") as f:

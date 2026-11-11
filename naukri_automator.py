@@ -588,6 +588,16 @@ class NaukriAutomator:
             return True, "Modal Submitted"
 
         except Exception as e:
+            err_s = str(e)
+            if "Execution context was destroyed" in err_s:
+                try:
+                    human_delay(1.0, 1.5)
+                    cur_url = (page.url or "").lower()
+                    if "myapply" in cur_url or "apply" in cur_url or page.locator("text=successfully applied, text=Already Applied").first.count() > 0:
+                        logger.info("Naukri modal redirected to application confirmation page — marked as applied.")
+                        return True, "Submitted & Navigated"
+                except Exception:
+                    pass
             logger.warning(f"Error handling modal: {e}")
             return False, f"Questionnaire Error: {e}"
 

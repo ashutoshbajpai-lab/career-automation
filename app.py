@@ -73,6 +73,7 @@ CURRENT_TASK = {"running": False, "name": "Idle", "started_at": None, "queued": 
 TASK_QUEUE = deque()
 TASK_LOCK = threading.Lock()
 LIVE_LOGS = []
+LAST_PERIODIC_RUNS = {"linkedin_feed": 0, "scan_gmail": 0, "scan_replies": 0}
 
 
 def add_log(msg: str):
@@ -4014,6 +4015,7 @@ def execute_task(task_type):
     CURRENT_TASK["name"] = task_type
     CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
 
+    task_failed = False
     try:
         if task_type == "run_all":
             add_log("🚀 MASTER AUTOPILOT ACTIVATED: Running all operations across Naukri, LinkedIn, and Gmail...")
@@ -4201,8 +4203,12 @@ def execute_task(task_type):
             add_log(f"✅ Mumbai Daily Check finished: {res.get('added_to_sending_list', 0)} promoted to Sending List, {res.get('still_pending', 0)} still pending.")
 
     except Exception as e:
+        task_failed = True
         add_log(f"ERROR during {task_type}: {e}")
     finally:
+        if task_type in LAST_PERIODIC_RUNS:
+            # Anchor cooldown to completion time (+30m extra backoff if it errored) so failed jobs never spin-loop
+            LAST_PERIODIC_RUNS[task_type] = time.time() + (1800 if task_failed else 0)
         import gc
         gc.collect()
         next_task = None
@@ -4274,12 +4280,6 @@ def autonomous_10h_scheduler():
         except Exception:
             pass
 
-    last_periodic_runs = {
-        "linkedin_feed": 0,
-        "scan_gmail": 0,
-        "scan_replies": 0
-    }
-
     def scheduled_job(task_name) -> bool:
         now_ist = datetime.now(IST)
         if not (9 <= now_ist.hour < 19):
@@ -4292,7 +4292,8 @@ def autonomous_10h_scheduler():
         CURRENT_TASK["name"] = task_name
         CURRENT_TASK["started_at"] = now_ist.strftime("%H:%M:%S")
         add_log(f"⏰ [10h SHIFT SCHEDULER] Triggering '{task_name}' at {now_ist.strftime('%H:%M:%S')} IST")
-        last_periodic_runs[task_name] = time.time()
+        if task_name in LAST_PERIODIC_RUNS:
+            LAST_PERIODIC_RUNS[task_name] = time.time()
         t = threading.Thread(target=execute_task, args=(task_name,), daemon=True)
         t.start()
         return True
@@ -4336,13 +4337,13 @@ def autonomous_10h_scheduler():
                         record_milestone(gmail_pm_key)
 
                 # Periodic Tasks only run once daily milestones due right now are caught up:
-                elif (now_ts - last_periodic_runs["linkedin_feed"]) > (45 * 60):
+                elif (now_ts - LAST_PERIODIC_RUNS["linkedin_feed"]) > (60 * 60):
                     scheduled_job("linkedin_feed")
 
-                elif (now_ts - last_periodic_runs["scan_gmail"]) > (30 * 60):
+                elif (now_ts - LAST_PERIODIC_RUNS["scan_gmail"]) > (45 * 60):
                     scheduled_job("scan_gmail")
 
-                elif (now_ts - last_periodic_runs["scan_replies"]) > (40 * 60):
+                elif (now_ts - LAST_PERIODIC_RUNS["scan_replies"]) > (60 * 60):
                     scheduled_job("scan_replies")
 
             elif current_hour >= 19:

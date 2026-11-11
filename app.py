@@ -831,10 +831,10 @@ MERAKI_UI_HTML = """
                 <tr>
                   <th class="p-3 w-8"><input type="checkbox" id="selectAllFeed" onchange="toggleSelectAllFeed(this)" class="rounded text-teal-600 cursor-pointer"></th>
                   <th class="p-3">Detected</th>
-                  <th class="p-3">Poster / Company</th>
-                  <th class="p-3">Context &amp; Tags</th>
+                  <th class="p-3">Name &amp; Profile</th>
+                  <th class="p-3">Job Role, Full JD &amp; Email</th>
                   <th class="p-3">Status</th>
-                  <th class="p-3 text-right">Actions</th>
+                  <th class="p-3 text-right">Post &amp; Form Links</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="feedPostsTableBody">
@@ -1894,44 +1894,62 @@ MERAKI_UI_HTML = """
         }
 
         tbody.innerHTML = posts.map(f => {
-          const tags = f.tags || ['Feed Post', '0-2 Yrs'];
+          const tags = f.tags || ['Feed Post', 'Non-Tech Role'];
           const tagsHtml = tags.map(t => {
             const isComment = t.includes('Comment');
             return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isComment ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-teal-100 text-teal-800 border border-teal-200'}">${t}</span>`;
           }).join(' ');
 
+          const safeText = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          const roleTitle = safeText(f.job_role || 'Hiring Opportunity');
+          const fullDesc = safeText(f.full_description || f.context || '');
+          const shortDesc = safeText((f.full_description || f.context || '').slice(0, 190));
+          const profileLinkHtml = f.author_url
+            ? `<a href="${f.author_url}" target="_blank" class="mt-1 mr-1 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-md text-[10px] font-semibold inline-flex items-center gap-1 transition"><i class="fa-solid fa-user text-slate-500"></i><span>Profile ↗</span></a>`
+            : '';
+          const emailHtml = f.email
+            ? `<div class="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800"><i class="fa-solid fa-envelope text-amber-600"></i><a href="mailto:${safeText(f.email)}" class="underline hover:text-amber-950">${safeText(f.email)}</a></div>`
+            : '';
+          const formBtnHtml = f.form_url
+            ? `<a href="${f.form_url}" target="_blank" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20"><span>Open &amp; Fill Form</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>`
+            : '';
+
           return `
-            <tr class="hover:bg-slate-50 transition">
+            <tr class="hover:bg-slate-50 transition align-top">
               <td class="p-3">
                 <input type="checkbox" class="feed-checkbox-item rounded text-teal-600 cursor-pointer" value="${f.id}" onchange="updateSelectedFeedCount()">
               </td>
-              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${f.timestamp}</td>
+              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">${safeText(f.timestamp)}</td>
               <td class="p-3 font-bold text-slate-900">
-                <div class="text-sm font-bold text-slate-900">${f.poster}</div>
-                <a href="${f.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition" title="Open original post on LinkedIn">
-                  <i class="fa-brands fa-linkedin text-blue-600"></i>
-                  <span>Source Post ↗</span>
-                </a>
+                <div class="text-sm font-bold text-slate-900">${safeText(f.poster)}</div>
+                <div class="flex flex-wrap items-center">
+                  ${profileLinkHtml}
+                  <a href="${f.post_url}" target="_blank" class="mt-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[10px] font-semibold inline-flex items-center gap-1 transition" title="Open original post on LinkedIn">
+                    <i class="fa-brands fa-linkedin text-blue-600"></i>
+                    <span>Post Link ↗</span>
+                  </a>
+                </div>
               </td>
-              <td class="p-3 text-slate-600 max-w-md">
+              <td class="p-3 text-slate-600 max-w-lg">
+                <div class="text-xs font-bold text-slate-900 mb-1">Role: ${roleTitle}</div>
                 <div class="flex items-center gap-1 flex-wrap mb-1">${tagsHtml}</div>
-                <div class="truncate text-xs text-slate-600" title="${f.context}">${f.context}</div>
+                <details class="text-xs text-slate-600">
+                  <summary class="cursor-pointer text-slate-700 hover:text-slate-950 font-medium">${shortDesc}${fullDesc.length > 190 ? '... <span class="text-teal-700 underline">[Read Full JD]</span>' : ''}</summary>
+                  <div class="mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg whitespace-pre-wrap text-[11px] leading-relaxed text-slate-700 max-h-56 overflow-y-auto">${fullDesc}</div>
+                </details>
+                ${emailHtml}
               </td>
-              <td class="p-3">
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${f.status || 'Pending Form Fill'}</span>
+              <td class="p-3 whitespace-nowrap">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-100 text-teal-800">${safeText(f.status || 'Pending')}</span>
               </td>
               <td class="p-3 text-right whitespace-nowrap">
                 <div class="inline-flex items-center gap-1.5 justify-end">
-                  <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post where this form was shared"
+                  <a href="${f.post_url}" target="_blank" title="View the original LinkedIn post"
                      class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition">
                     <i class="fa-brands fa-linkedin text-blue-600 text-sm"></i>
                     <span>Source Post ↗</span>
                   </a>
-                  <a href="${f.form_url}" target="_blank"
-                     class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm shadow-teal-600/20">
-                    <span>Open &amp; Fill Form</span>
-                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
-                  </a>
+                  ${formBtnHtml}
                   <button onclick="removeFeedPost('${f.id}')" title="Dismiss / Remove this post"
                           class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold inline-flex items-center gap-1 transition cursor-pointer">
                     <i class="fa-solid fa-trash-can text-xs"></i>

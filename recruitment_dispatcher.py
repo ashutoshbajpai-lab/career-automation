@@ -107,12 +107,19 @@ def sync_leads():
             recruiter_leads = []
             recruiter_leads = []
 
+    seen_post_ids = {item.get("id") for item in pending_forms if item.get("id")}
+
     for post in feed_leads:
         raw_author = post.get("author", "").strip()
+        author_url = (post.get("author_url") or "").strip()
         preview = post.get("preview", "")
+        full_description = (post.get("job_description") or preview or "").strip()
+        job_role = (post.get("job_role") or "Hiring Opportunity").strip()
         timestamp = post.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         post_url = post.get("post_url", "").strip()
         post_tags = post.get("tags", ["Recruiting (0-2 Yrs)"])
+        emails_str = post.get("emails", "")
+        first_email = clean_extracted_email(emails_str.split(",")[0]) if emails_str else ""
 
         # Clean author name from preview if needed
         author = raw_author
@@ -135,39 +142,58 @@ def sync_leads():
                 q = clean_prev or "hiring"
             post_url = f"https://www.linkedin.com/search/results/content/?keywords={quote(q)}"
 
-        # 1. Process Form Links & External Application Links
+        # 1. Process Form Links, External Application Links, OR Direct Email/DM Hiring Posts
         forms_str = post.get("form_links", "")
+        candidate_urls = []
         if forms_str:
-            for form_url in [u.strip() for u in forms_str.split(",") if u.strip()]:
-                if form_url not in seen_forms and form_url not in dismissed_forms:
+            candidate_urls = [u.strip() for u in forms_str.split(",") if u.strip()]
+        elif post.get("hyperlinks"):
+            candidate_urls = [
+                u.strip() for u in post.get("hyperlinks", "").split(",")
+                if u.strip() and not any(ign in u.lower() for ign in ["linkedin.com", "apple.com", "play.google.com"])
+            ]
+
+        if candidate_urls:
+            for form_url in candidate_urls:
+                fid = str(abs(hash(form_url)))
+                if form_url not in seen_forms and form_url not in dismissed_forms and fid not in seen_post_ids and fid not in dismissed_forms:
                     seen_forms.add(form_url)
+                    seen_post_ids.add(fid)
                     pending_forms.append({
-                        "id": str(abs(hash(form_url))),
+                        "id": fid,
                         "timestamp": timestamp,
                         "poster": author,
+                        "author_url": author_url,
+                        "job_role": job_role,
+                        "full_description": full_description,
+                        "email": first_email,
                         "form_url": form_url,
                         "post_url": post_url,
                         "tags": post_tags,
-                        "context": preview[:180],
-                        "status": "Pending Manual Fill"
+                        "context": full_description[:240],
+                        "status": "Pending Form Fill"
                     })
-        elif post.get("hyperlinks"):
-            for link in [u.strip() for u in post.get("hyperlinks", "").split(",") if u.strip()]:
-                if link not in seen_forms and link not in dismissed_forms and not any(ign in link.lower() for ign in ["linkedin.com", "apple.com", "play.google.com"]):
-                    seen_forms.add(link)
-                    pending_forms.append({
-                        "id": str(abs(hash(link))),
-                        "timestamp": timestamp,
-                        "poster": author,
-                        "form_url": link,
-                        "post_url": post_url,
-                        "tags": post_tags,
-                        "context": preview[:180],
-                        "status": "Pending Manual Fill"
-                    })
+        else:
+            # Retain email-only / DM-only hiring posts cleanly so every scraped hiring post & full JD is visible
+            pid = str(post.get("id") or abs(hash(post_url + full_description[:80])))
+            if pid not in seen_post_ids and pid not in dismissed_forms:
+                seen_post_ids.add(pid)
+                pending_forms.append({
+                    "id": pid,
+                    "timestamp": timestamp,
+                    "poster": author,
+                    "author_url": author_url,
+                    "job_role": job_role,
+                    "full_description": full_description,
+                    "email": first_email,
+                    "form_url": "",
+                    "post_url": post_url,
+                    "tags": post_tags,
+                    "context": full_description[:240],
+                    "status": "Email Apply" if first_email else "DM / Comment Apply"
+                })
 
         # 2. Process Recruiter Emails
-        emails_str = post.get("emails", "")
         if emails_str:
             for raw_email in [e.strip() for e in emails_str.split(",") if e.strip()]:
                 email = clean_extracted_email(raw_email)
@@ -217,10 +243,11 @@ def sync_leads():
                     else:
                         salutation = first_tok
 
-                    subject = f"Application for Analyst / Product Role - {CANDIDATE_NAME} ({CANDIDATE_COLLEGE})"
+                    role_label = job_role if job_role and job_role != "Hiring Opportunity" else "Analyst / Product Role"
+                    subject = f"Application for {role_label} - {CANDIDATE_NAME} ({CANDIDATE_COLLEGE})"
                     body = (
                         f"Hi {salutation},\n\n"
-                        f"I came across your recruitment post regarding the opening and would love to be considered. "
+                        f"I came across your recruitment post regarding the {role_label} opening and would love to be considered. "
                         f"I am a final-year student at {CANDIDATE_COLLEGE} with hands-on experience in Product and Data Analysis, "
                         f"market research, and cross-functional execution.\n\n"
                         f"My details:\n"
@@ -248,7 +275,11 @@ def sync_leads():
                         "id": str(abs(hash(email))),
                         "timestamp": timestamp,
                         "recipient_name": lead_author,
+                        "author_url": author_url,
+                        "job_role": role_label,
+                        "full_description": full_description,
                         "email": email,
+                        "form_url": candidate_urls[0] if candidate_urls else "",
                         "subject": subject,
                         "draft_body": body,
                         "mailto_link": mailto,
@@ -256,7 +287,7 @@ def sync_leads():
                         "post_url": recruiter_post_url,
                         "tags": post_tags,
                         "status": "Draft Prepared",
-                        "context": preview[:180]
+                        "context": full_description[:240]
                     })
 
     # Partition into Feed Posts (from feed scrolling) vs Easy Apply Job Postings

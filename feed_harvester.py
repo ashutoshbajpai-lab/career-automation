@@ -31,13 +31,38 @@ FORM_DOMAINS = [
 ]
 
 STRONG_HIRING_REGEX = re.compile(
-    r"\b("
-    r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|"
-    r"hiring\s*:|hiring for|looking to join\b.{0,50}\b(?:startup|team|company)|"
-    r"looking for\b.{0,65}\b(?:interns?|associates?|analysts?|managers?|engineers?|designers?|heads?|leads?|developers?|sales|executives?|specialists?|consultants?|candidates?|talent)|"
-    r"join our team|open role|open position|job opening|"
+    r"\b(?:"
+    r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|looking to hire|"
+    r"hiring\s*[:\-–]|hiring\s+(?:a|an|for)\b|seeking\s+(?:a|an)\b|"
+    r"looking to join\b.{0,50}\b(?:startup|team|company)\b|"
+    r"looking for\b.{0,75}\b(?:interns?|trainees?|associates?|analysts?|managers?|heads?|leads?|sales|executives?|specialists?|coordinators?|consultants?|strategists?|marketers?|recruiters?|designers?|professionals?|candidates?|talent|folks|people|team members?|founder'?s office|bizops|operations?|marketing|growth|partnerships?|finance|hr|content)\b|"
+    r"join our team|open role|open position|job opening|openings? for|vacanc(?:y|ies)|recruiting for|"
     r"share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume)|"
     r"reach out at|interested candidates please apply|application form in the comments"
+    r")",
+    re.IGNORECASE,
+)
+
+NON_TECH_ROLE_REGEX = re.compile(
+    r"\b("
+    r"non[- ]?tech|product|apm|analytics|analyst|business|bizops|strategy|strategic|operations|ops|"
+    r"marketing|trade marketing|brand|growth|performance marketing|digital marketing|content|copywriter|pr|communications|"
+    r"sales|b2b|inside sales|business development|\bbd\b|partnerships?|account manager|client|customer success|crm|"
+    r"founder'?s office|chief of staff|management trainee|trainee|generalist|program manager|project manager|"
+    r"finance|financial|accounting|audit|investment|venture|vc|private equity|equity research|consulting|consultant|"
+    r"hr|human resources|talent acquisition|\bta\b|recruiter|recruiting|people ops|staffing|"
+    r"supply chain|logistics|procurement|category|merchandising|retail|e-?commerce|"
+    r"research|market research|ux|ui/ux|design|intern|internship"
+    r")\b",
+    re.IGNORECASE,
+)
+
+PURE_TECH_ONLY_REGEX = re.compile(
+    r"\b("
+    r"software engineer|software developer|\bsde\b|frontend|back[- ]?end|full[- ]?stack|fullstack|"
+    r"devops|\bsre\b|kubernetes|docker|react\.?js|angular|vue\.?js|node\.?js|golang|rust|"
+    r"java developer|python developer|c\+\+|\.net|ios developer|android developer|flutter|"
+    r"qa automation|selenium|embedded|firmware|blockchain|solidity|cloud architect|mlops|data engineer"
     r")\b",
     re.IGNORECASE,
 )
@@ -55,8 +80,9 @@ NON_HIRING_NOISE_REGEX = re.compile(
 def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_links: list, comment_links: list) -> tuple:
     """
     Strictly verifies that a LinkedIn feed post is an active hiring post
-    matching real hiring announcements (emails, apply forms, lnkd.in links,
-    comment-form links, or explicit 'DM me'), filtering out unrelated noise posts.
+    across ALL non-tech roles (Sales, Marketing, Ops, Strategy, Finance, HR, Product,
+    Analytics, BizOps, BD, Founder's Office, Trainee/Intern, etc.) plus Product/Design,
+    skipping pure software-coding-only postings and non-hiring commentary.
     """
     low = (text or "").lower()
     has_strong_hiring = bool(STRONG_HIRING_REGEX.search(low))
@@ -66,18 +92,26 @@ def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_l
     if NON_HIRING_NOISE_REGEX.search(low) and not re.search(r"\b(we['’]?re hiring|we are hiring|hiring\s*:|apply here|share (?:your )?(?:cv|resume))\b", low):
         return False, []
 
+    has_non_tech = bool(NON_TECH_ROLE_REGEX.search(low))
+    is_pure_tech_only = bool(PURE_TECH_ONLY_REGEX.search(low)) and not has_non_tech
+    if is_pure_tech_only:
+        return False, []
+
     has_actionable = bool(
         emails
         or form_links
         or external_links
         or comment_links
-        or re.search(r"\b(dm me|send dm|message me|in the comments|reach out at|apply here|share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume))\b", low)
+        or re.search(
+            r"\b(dm me|send dm|message me|ping me|in the comments|comment below|comment ['\"]?interested|reach out|apply here|fill the form|link in bio|share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume))\b",
+            low,
+        )
     )
     if not has_actionable:
         return False, []
 
     tags = []
-    has_junior = any(k in low for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst"])
+    has_junior = any(k in low for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst", "trainee"])
     has_senior = any(k in low for k in ["5+ years", "6+ years", "7+ years", "8+ years", "10+ years", "head –", "head -", "director", "vp"])
     if has_junior:
         tags.append("Recruiting (0-3 Yrs)")
@@ -86,6 +120,8 @@ def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_l
     else:
         tags.append("Hiring Post")
 
+    if has_non_tech:
+        tags.append("Non-Tech Role")
     if emails:
         tags.append("Direct Email")
     if form_links or comment_links or "comments" in low:
@@ -104,6 +140,77 @@ def extract_real_url(href: str) -> str:
         if m:
             return urllib.parse.unquote(m.group(1))
     return href
+
+
+def clean_post_description(raw_text: str, author: str = "") -> str:
+    """Strips LinkedIn feed UI chrome lines and returns the detailed post JD/body cleanly."""
+    if not raw_text:
+        return ""
+    noise_exact = {
+        "feed post", "follow", "following", "connect", "like", "comment", "repost", "send",
+        "promoted", "… more", "... more", "see more", "see translation",
+    }
+    noise_re = re.compile(
+        r"^(?:"
+        r"Feed post|"
+        r"(?:Followed|Reposted|Commented) by .*|"
+        r".*\b(?:likes this|loves this|celebrates this|finds this insightful|commented on|reposted this|follows this page)$|"
+        r"[•\s]*(?:1st|2nd|3rd\+?)\s*$|"
+        r"\d+[\d,]*\s*(?:followers|connections?|comments?|reposts?|reactions?)\s*$|"
+        r"\d+[smhdwyo]\s*(?:•\s*Edited)?\s*$|"
+        r"Reaction button.*|Open reactions menu.*"
+        r")$",
+        re.IGNORECASE,
+    )
+    cleaned = []
+    skipped_header = False
+    author_low = (author or "").strip().lower()
+    for line in raw_text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        sl = s.lower()
+        if sl in noise_exact or noise_re.match(s):
+            continue
+        if not skipped_header and author_low and (sl == author_low or sl.startswith(author_low + " •")):
+            skipped_header = True
+            continue
+        cleaned.append(s)
+    # Trim trailing comment preview noise after action bar if present
+    text_out = "\n".join(cleaned).strip()
+    return text_out[:3000]
+
+
+def extract_job_role(description: str) -> str:
+    """Extracts the job role/title being hired for from LinkedIn hiring post text."""
+    if not description:
+        return "Hiring Opportunity"
+    patterns = [
+        r"(?:we(?:'re| are)\s+hiring|now hiring|urgently hiring|hiring)\s*[:\-–]\s*([^\n|•.]{3,85})",
+        r"(?:we(?:'re| are)\s+hiring(?:\s+for)?(?:\s+a|\s+an)?)\s+([^\n.!?]{3,75})",
+        r"(?:looking for|seeking)\s+(?:an?\s+)?([^\n.!?]{3,75}?\b(?:interns?|associates?|analysts?|managers?|engineers?|developers?|designers?|heads?|leads?|sales|executives?|specialists?|consultants?)\b[^\n.!?]{0,25})",
+        r"(?:role|position|opening|vacancy)\s*[:\-–]\s*([^\n|•]{3,80})",
+        r"looking to join an early stage\s+([^\n?.!]{3,75})",
+    ]
+    for pat in patterns:
+        m = re.search(pat, description, re.IGNORECASE)
+        if m:
+            role = re.sub(r"\s+", " ", m.group(1)).strip(" :-–|•.,!?\t")
+            # Trim trailing filler clauses
+            role = re.split(r"\s+(?:for \d|based in|at [A-Z]|to drive|to join|with \d)", role, maxsplit=1)[0].strip(" :-–|•.,")
+            if 3 <= len(role) <= 85:
+                return role
+    # Fallback: first line containing a known role keyword
+    role_kw = re.compile(
+        r"\b(intern|trainee|analyst|associate|product manager|apm|manager|head|lead|sales|bd|business development|"
+        r"marketing|operations|ops|strategy|bizops|growth|partnerships?|finance|hr|recruiter|designer|consultant|executive|coordinator)\b",
+        re.IGNORECASE,
+    )
+    for line in description.splitlines():
+        s = line.strip()
+        if role_kw.search(s) and len(s) <= 85:
+            return re.sub(r"\s+", " ", s)
+    return "Hiring Opportunity"
 
 
 class FeedHarvester:
@@ -265,6 +372,24 @@ class FeedHarvester:
                                 if (lines.length) authorName = lines[0].split('•')[0].trim();
                             }
 
+                            let authorUrl = '';
+                            const actorLinks = Array.from(card.querySelectorAll('a[href*="/in/"], a[href*="/company/"]'));
+                            for (const al of actorLinks) {
+                                const txt = (al.innerText || '').trim().toLowerCase();
+                                const aLow = (authorName || '').toLowerCase();
+                                if (aLow && txt && (txt.includes(aLow) || aLow.includes(txt.split('•')[0].trim()))) {
+                                    authorUrl = (al.href || '').split('?')[0];
+                                    break;
+                                }
+                            }
+                            if (!authorUrl && actorLinks.length) {
+                                const nonLike = actorLinks.find(al => {
+                                    const pText = (al.parentElement?.innerText || '').toLowerCase();
+                                    return !pText.includes('likes this') && !pText.includes('commented') && !pText.includes('reposted') && !pText.includes('followed by');
+                                }) || actorLinks[0];
+                                authorUrl = (nonLike.href || '').split('?')[0];
+                            }
+
                             // Extract post URN and direct permalink
                             let urn = card.getAttribute('data-urn') || 
                                       card.getAttribute('data-id') || 
@@ -327,6 +452,7 @@ class FeedHarvester:
                             results.push({
                                 text: rawText,
                                 author: authorName,
+                                author_url: authorUrl,
                                 post_url: postPermalink,
                                 links: links,
                                 comment_links: commentLinks
@@ -488,21 +614,27 @@ class FeedHarvester:
                     search_kw = snip or "hiring"
                 post_url = f"https://www.linkedin.com/search/results/content/?keywords={urllib.parse.quote(search_kw)}"
 
-            if True:  # Already verified via is_genuine_hiring_post() above
-                record = {
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "author": author[:60],
-                    "emails": ", ".join(emails),
-                    "form_links": ", ".join(form_links),
-                    "hyperlinks": ", ".join(external_links[:3]),
-                    "post_url": post_url,
-                    "tags": tags,
-                    "preview": text[:200].replace("\n", " ").strip(),
-                    "id": hash_id
-                }
-                new_leads.append(record)
-                seen_urns.add(hash_id)
-                self._log(f"🎯 [LEAD DISCOVERED] Author: {author[:25]} | Emails: {', '.join(emails) or 'None'} | Forms: {', '.join(form_links) or 'None'}")
+            full_desc = clean_post_description(text, author=author)
+            job_role = extract_job_role(full_desc)
+            author_url = (item.get("author_url") or "").strip()
+
+            record = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "author": author[:60],
+                "author_url": author_url,
+                "job_role": job_role,
+                "job_description": full_desc,
+                "emails": ", ".join(emails),
+                "form_links": ", ".join(form_links),
+                "hyperlinks": ", ".join(external_links[:3]),
+                "post_url": post_url,
+                "tags": tags,
+                "preview": full_desc[:320].replace("\n", " ").strip(),
+                "id": hash_id
+            }
+            new_leads.append(record)
+            seen_urns.add(hash_id)
+            self._log(f"🎯 [LEAD DISCOVERED] {author[:25]} | Role: {job_role[:35]} | Emails: {', '.join(emails) or 'None'} | Forms: {', '.join(form_links) or 'None'}")
 
         self.state["seen_post_urns"] = list(seen_urns)[-500:]
         self._save_leads(new_leads)
@@ -572,7 +704,7 @@ class FeedHarvester:
 
         file_exists = os.path.exists(self.leads_csv)
         with open(self.leads_csv, "a", newline="", encoding="utf-8") as f:
-            fieldnames = ["timestamp", "author", "emails", "form_links", "hyperlinks", "post_url", "preview", "tags", "id"]
+            fieldnames = ["timestamp", "author", "author_url", "job_role", "emails", "form_links", "hyperlinks", "post_url", "job_description", "preview", "tags", "id"]
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             if not file_exists:
                 writer.writeheader()

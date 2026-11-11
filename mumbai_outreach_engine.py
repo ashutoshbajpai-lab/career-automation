@@ -747,6 +747,7 @@ class MumbaiOutreachEngine:
                 log(f"Extracting 30+ contacts for '{comp_name}' ({comp['size_tier']} employees)...")
 
                 company_found = 0
+                pages_loaded = 0
 
                 def _ingest_people(raw_list, default_kw="Target", force_pec=False):
                     nonlocal company_found
@@ -791,24 +792,30 @@ class MumbaiOutreachEngine:
                     return added_here
 
                 def _goto_and_check(target_url):
-                    nonlocal auth_failed, rate_limited
+                    nonlocal auth_failed, rate_limited, pages_loaded
                     try:
                         resp = page.goto(target_url, wait_until="domcontentloaded")
                         human_delay(3.0, 4.6)
-                        if resp and resp.status == 429:
-                            log("⚠️ LinkedIn returned HTTP 429 (rate limit). Stopping cleanly and saving contacts found so far — retry in 10–15 min.")
+                        if resp and resp.status in (429, 999):
+                            log(f"⚠️ LinkedIn returned HTTP {resp.status} (rate limit/block). Stopping batch cleanly and saving any discovered contacts.")
                             rate_limited = True
                             return False
                         if "uas/login" in page.url or "checkpoint" in page.url:
-                            log("⚠️ LinkedIn redirected to Login/Checkpoint! Click 'LinkedIn: Update Key' in the header to update session.")
+                            log("⚠️ LinkedIn redirected to Login/Checkpoint! Click 'LinkedIn: Update Key' → 'Open Chrome Sign-In Window' to refresh session.")
                             self.browser_mgr.mark_session_expired("search_redirect")
                             auth_failed = True
                             return False
+                        pages_loaded += 1
                         return True
                     except Exception as e:
                         err_s = str(e)
-                        if "ERR_TOO_MANY_REDIRECTS" in err_s or "429" in err_s:
-                            log("⚠️ LinkedIn triggered redirect-loop / rate limit (429). Saving discovered contacts and pausing batch cleanly.")
+                        if "ERR_TOO_MANY_REDIRECTS" in err_s:
+                            log("⚠️ LinkedIn returned ERR_TOO_MANY_REDIRECTS (session revoked/expired). Click 'LinkedIn: Update Key' → 'Open Chrome Sign-In Window' to sign in cleanly.")
+                            self.browser_mgr.mark_session_expired("search_redirect_loop")
+                            auth_failed = True
+                            return False
+                        if any(code in err_s for code in ("ERR_HTTP_RESPONSE_CODE_FAILURE", "429", "999")):
+                            log(f"⚠️ LinkedIn blocked search request ({err_s.splitlines()[0]}). Stopping cleanly without marking company scanned.")
                             rate_limited = True
                             return False
                         logger.debug(f"Search navigation warning for {target_url}: {e}")
@@ -864,8 +871,8 @@ class MumbaiOutreachEngine:
                             except Exception:
                                 pass
 
-                # Incremental checkpoint save after every company so discovered contacts are never lost
-                if company_found > 0 or not rate_limited:
+                # Incremental checkpoint save after every company ONLY if at least 1 page actually loaded cleanly
+                if pages_loaded > 0 and not rate_limited and not auth_failed:
                     comp["last_scanned_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.save_companies(all_companies)
                 self.save_contacts(existing_contacts)

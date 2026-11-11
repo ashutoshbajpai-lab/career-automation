@@ -279,8 +279,13 @@ class BrowserManager:
             title_snippet = (res.text[:2000] if res.text else "").lower()
             if "linkedin login" in title_snippet or "sign in | linkedin" in title_snippet:
                 return False
+            if res.status_code in (429, 999):
+                return False
             return True
         except Exception as e:
+            if "TooManyRedirects" in type(e).__name__ or "redirect" in str(e).lower():
+                logger.warning("probe_li_at_valid hit redirect loop (revoked/expired LinkedIn session).")
+                return False
             logger.debug(f"probe_li_at_valid transient error (deferring to browser): {e}")
             return True
 

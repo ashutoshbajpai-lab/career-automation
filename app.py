@@ -1509,6 +1509,10 @@ MERAKI_UI_HTML = """
                 <i class="fa-solid fa-paper-plane"></i>
                 <span>Send Messages to Sending List</span>
               </button>
+              <button onclick="runMumbaiFullSequence()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 cursor-pointer">
+                <i class="fa-solid fa-forward-step"></i>
+                <span>Run Full Sequence (30+ → Connect → Send)</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3128,6 +3132,30 @@ MERAKI_UI_HTML = """
       } catch (e) { alert('Error: ' + e); }
     }
 
+    async function runMumbaiFullSequence() {
+      const companyIds = _getSelectedMumbaiCompanyIds();
+      const kw = document.getElementById('mumbaiKeywordsInput').value;
+      if (!confirm('Run sequential pipeline: (1) Find 30+ Contacts & Store List → (2) Maximize Connection Requests → (3) Check Accepted → (4) Send Customized Templates to Sending List?')) return;
+      try {
+        const res = await fetch('/api/mumbai/sequence/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company_ids: companyIds,
+            keywords: kw,
+            max_companies: 2,
+            min_contacts_per_company: 30,
+            max_connects: 35,
+            max_messages: 35,
+            include_send_messages: true
+          })
+        });
+        const d = await res.json();
+        alert(d.message || d.error || 'Full Mumbai outreach sequence started in background!');
+        switchTab('terminal');
+      } catch (e) { alert('Error: ' + e); }
+    }
+
     function switchMumbaiSubTab(sub) {
       currentMumbaiSubTab = sub;
       const styles = {
@@ -3892,6 +3920,52 @@ def mumbai_followup_check_route():
         "Started Daily Check for all accepted connections -> Sending List & Message!"
     )
     return jsonify({"success": True, "message": msg})
+
+
+@app.route("/api/mumbai/sequence/run", methods=["POST"])
+def mumbai_run_sequence_route():
+    with TASK_LOCK:
+        if CURRENT_TASK["running"]:
+            return jsonify({"success": False, "error": f"Task '{CURRENT_TASK['name']}' is currently running."}), 400
+        CURRENT_TASK["running"] = True
+        CURRENT_TASK["name"] = "Mumbai Full Outreach Sequence"
+        CURRENT_TASK["started_at"] = datetime.now(IST).strftime("%H:%M:%S")
+
+    data = request.json or {}
+    company_ids = data.get("company_ids", [])
+    raw_kw = data.get("keywords", "Founder's Office, HR, Talent, Product, Analyst")
+    keywords = [k.strip() for k in raw_kw.split(",") if k.strip()] if isinstance(raw_kw, str) else raw_kw
+    max_companies = int(data.get("max_companies", 2))
+    min_contacts_per_company = int(data.get("min_contacts_per_company", 30))
+    max_connects = int(data.get("max_connects", 35))
+    max_messages = int(data.get("max_messages", 35))
+    include_send_messages = bool(data.get("include_send_messages", True))
+
+    def _run():
+        try:
+            engine = MumbaiOutreachEngine()
+            engine.run_full_pipeline_sequence(
+                company_ids=company_ids or None,
+                keywords=keywords,
+                max_companies=max_companies,
+                min_contacts_per_company=min_contacts_per_company,
+                max_connects=max_connects,
+                max_messages=max_messages,
+                include_send_messages=include_send_messages,
+                log_cb=add_log,
+            )
+        except Exception as e:
+            add_log(f"ERROR in Mumbai sequential pipeline: {e}")
+        finally:
+            import gc
+            gc.collect()
+            with TASK_LOCK:
+                CURRENT_TASK["running"] = False
+                CURRENT_TASK["name"] = "Idle"
+                CURRENT_TASK["started_at"] = None
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"success": True, "message": "Started Mumbai Sequential Pipeline: 30+ Contacts → Maximize Connects → Sending List → Send Messages!"})
 
 
 def load_json_file(filepath: str, default: dict) -> dict:

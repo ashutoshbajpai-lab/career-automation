@@ -1033,6 +1033,7 @@ class MumbaiOutreachEngine:
             if not self.browser_mgr.ensure_logged_in(page, timeout_sec=10):
                 return {"status": "Auth Required", "message": "LinkedIn login required (update li_at cookie)."}
 
+            processed_cnt = 0
             for contact in candidates:
                 if connects_sent >= max_connects and (connect_only or messages_sent >= max_messages):
                     break
@@ -1045,12 +1046,13 @@ class MumbaiOutreachEngine:
 
                 try:
                     log(f"Connecting with {name} ({comp_name}, {contact.get('size_tier')}, {'PEC' if contact.get('is_pec_alumni') else 'Other'})...")
-                    page.goto(purl, wait_until="domcontentloaded")
-                    human_delay(2.2, 3.5)
+                    resp = page.goto(purl, wait_until="domcontentloaded")
+                    human_delay(2.5, 3.8)
 
-                    if "uas/login" in page.url or "checkpoint" in page.url:
-                        log("⚠️ LinkedIn redirected to Login! Update li_at cookie first.")
-                        self.browser_mgr.mark_session_expired("connect_cycle_redirect")
+                    if (resp and resp.status in (429, 999)) or "uas/login" in page.url or "checkpoint" in page.url:
+                        log("⚠️ LinkedIn redirected to Login or rate-limited during Connect cycle. Saving progress & stopping.")
+                        if "uas/login" in page.url or "checkpoint" in page.url:
+                            self.browser_mgr.mark_session_expired("connect_cycle_redirect")
                         break
 
                     self._verify_pec_from_profile(page, contact, log)
@@ -1104,7 +1106,18 @@ class MumbaiOutreachEngine:
                             log(f"Could not find Connect button for {name} (may be Follow-only).")
 
                     human_delay(2.0, 3.2)
+                    processed_cnt += 1
+                    if processed_cnt % 5 == 0:
+                        self.save_contacts(all_contacts)
                 except Exception as e:
+                    err_s = str(e)
+                    if "ERR_TOO_MANY_REDIRECTS" in err_s:
+                        log("⚠️ Hit ERR_TOO_MANY_REDIRECTS in connect cycle — marking session expired & saving progress.")
+                        self.browser_mgr.mark_session_expired("connect_redirect_loop")
+                        break
+                    if any(code in err_s for code in ("ERR_HTTP_RESPONSE_CODE_FAILURE", "429", "999")):
+                        log("⚠️ LinkedIn rate-limited connect cycle — saving progress & stopping cleanly.")
+                        break
                     logger.warning(f"Error processing {name}: {e}")
 
             self.save_contacts(all_contacts)
@@ -1164,6 +1177,7 @@ class MumbaiOutreachEngine:
             if not self.browser_mgr.ensure_logged_in(page, timeout_sec=10):
                 return {"status": "Auth Required", "message": "LinkedIn login required (update li_at cookie)."}
 
+            sent_loop_cnt = 0
             for contact in candidates:
                 if messages_sent >= max_messages:
                     break
@@ -1174,11 +1188,12 @@ class MumbaiOutreachEngine:
                     continue
 
                 try:
-                    page.goto(purl, wait_until="domcontentloaded")
-                    human_delay(2.2, 3.5)
-                    if "uas/login" in page.url or "checkpoint" in page.url:
-                        log("⚠️ LinkedIn redirected to Login! Update li_at cookie.")
-                        self.browser_mgr.mark_session_expired("send_messages_redirect")
+                    resp = page.goto(purl, wait_until="domcontentloaded")
+                    human_delay(2.5, 3.8)
+                    if (resp and resp.status in (429, 999)) or "uas/login" in page.url or "checkpoint" in page.url:
+                        log("⚠️ LinkedIn redirected to Login or rate-limited! Saving progress & stopping.")
+                        if "uas/login" in page.url or "checkpoint" in page.url:
+                            self.browser_mgr.mark_session_expired("send_messages_redirect")
                         break
 
                     self._verify_pec_from_profile(page, contact, log)
@@ -1193,8 +1208,19 @@ class MumbaiOutreachEngine:
                         self._increment_daily_stat("messages_sent", 1)
                         self._increment_daily_stat("completed_followups", 1)
                         log(f"[COMPLETED] Delivered {'PEC' if contact.get('is_pec_alumni') else 'Other'} template message to {name} ({comp_name}).")
+                    sent_loop_cnt += 1
+                    if sent_loop_cnt % 5 == 0:
+                        self.save_contacts(all_contacts)
                     human_delay(2.0, 3.5)
                 except Exception as e:
+                    err_s = str(e)
+                    if "ERR_TOO_MANY_REDIRECTS" in err_s:
+                        log("⚠️ Hit ERR_TOO_MANY_REDIRECTS in Send Messages — marking session expired & saving.")
+                        self.browser_mgr.mark_session_expired("send_redirect_loop")
+                        break
+                    if any(code in err_s for code in ("ERR_HTTP_RESPONSE_CODE_FAILURE", "429", "999")):
+                        log("⚠️ LinkedIn rate-limited Send Messages — saving progress & stopping cleanly.")
+                        break
                     logger.warning(f"Error messaging {name}: {e}")
 
             self.save_contacts(all_contacts)
@@ -1374,6 +1400,90 @@ class MumbaiOutreachEngine:
     # Backwards-compatible alias
     def run_2day_followup_check(self, min_age_days: int = 0, check_all_pending: bool = True, send_immediately: bool = False, log_cb=None) -> dict:
         return self.run_daily_acceptance_and_send(min_age_days=min_age_days, check_all_pending=check_all_pending, send_immediately=send_immediately, log_cb=log_cb)
+
+    # ------------------------------------------------------------------
+    # Chained Sequential Orchestrator (30+ Contacts -> Connect Requests -> Sending List -> Send Messages)
+    # ------------------------------------------------------------------
+    def run_full_pipeline_sequence(
+        self,
+        company_ids: list = None,
+        keywords: list = None,
+        max_companies: int = 2,
+        min_contacts_per_company: int = 30,
+        max_connects: int = 35,
+        max_messages: int = 35,
+        include_send_messages: bool = True,
+        log_cb=None,
+    ) -> dict:
+        """
+        Executes the complete Mumbai Outreach sequence step-by-step with RAM cooldown guards:
+        [1/4] Find 30+ Contacts & Store List (PEC vs Other)
+        [2/4] Maximize Connection Requests Only (queues 1st-degree contacts in Sending List)
+        [3/4] Daily Check Accepted -> Sending List
+        [4/4] Send Messages to Sending List (if include_send_messages=True)
+        """
+        from browser_session import wait_for_ram_cooldown
+
+        def log(msg):
+            logger.info(msg)
+            if log_cb:
+                log_cb(msg)
+
+        summary = {"steps": {}, "status": "Success"}
+        log("🔄 [SEQUENCE 1/4] Step 1: Finding 30+ contacts per company & storing list...")
+        res1 = self.generate_contacts_for_companies(
+            company_ids=company_ids,
+            keywords=keywords,
+            max_companies=max_companies,
+            min_contacts_per_company=min_contacts_per_company,
+            limit_per_company=max(45, min_contacts_per_company + 10),
+            log_cb=log,
+        )
+        summary["steps"]["discover"] = res1
+        if str(res1.get("status", "")).startswith("Auth Required"):
+            summary["status"] = "Auth Required"
+            log("⛔ [SEQUENCE STOPPED] LinkedIn authentication required — complete sign-in before continuing.")
+            return summary
+
+        wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=5.0, log_cb=log)
+
+        log("🤝 [SEQUENCE 2/4] Step 2: Maximizing note-less Connection Requests...")
+        res2 = self.run_connect_and_message_cycle(
+            company_ids=company_ids,
+            max_connects=max_connects,
+            max_messages=0,
+            connect_only=True,
+            log_cb=log,
+        )
+        summary["steps"]["connect"] = res2
+        if str(res2.get("status", "")).startswith("Auth Required"):
+            summary["status"] = "Auth Required (Partial)"
+            log("⛔ [SEQUENCE STOPPED] Session expired during connection requests.")
+            return summary
+
+        wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=5.0, log_cb=log)
+
+        log("🔍 [SEQUENCE 3/4] Step 3: Checking accepted connections → Sending List...")
+        res3 = self.run_daily_acceptance_and_send(
+            min_age_days=0,
+            check_all_pending=True,
+            send_immediately=False,
+            log_cb=log,
+        )
+        summary["steps"]["followup"] = res3
+
+        if include_send_messages:
+            wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=5.0, log_cb=log)
+            log("✉️ [SEQUENCE 4/4] Step 4: Sending customized PEC/Other messages to Sending List...")
+            res4 = self.run_send_messages_only(
+                company_ids=company_ids,
+                max_messages=max_messages,
+                log_cb=log,
+            )
+            summary["steps"]["send_messages"] = res4
+
+        log("🎉 [SEQUENCE COMPLETE] Mumbai sequential pipeline finished!")
+        return summary
 
     # ------------------------------------------------------------------
     # Dashboard Payload Aggregator

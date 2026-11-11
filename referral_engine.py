@@ -333,8 +333,8 @@ class ReferralEngine:
 
     def _send_direct_message(self, page, message_text: str) -> bool:
         try:
-            msg_btn = page.locator("button:has-text('Message'), a:has-text('Message')").first
-            if msg_btn.count() == 0 or not msg_btn.is_visible():
+            msg_btn = page.locator("main button:has-text('Message'), main a:has-text('Message'), button:has-text('Message'), a:has-text('Message')").locator("visible=true").first
+            if msg_btn.count() == 0:
                 return False
             msg_btn.click()
             human_delay(1.5, 2.5)

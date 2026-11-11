@@ -25,8 +25,73 @@ FORM_DOMAINS = [
     "forms.gle", "docs.google.com/forms", "typeform.com", "airtable.com", 
     "notion.site", "notion.so", "tally.so", "forms.office.com", 
     "surveymonkey.com", "greenhouse.io", "lever.co", "ashbyhq.com", 
-    "smartrecruiters.com", "bamboohr.com", "workday.com", "wellfound.com"
+    "smartrecruiters.com", "bamboohr.com", "workday.com", "wellfound.com",
+    "lnkd.in", "bit.ly", "tinyurl.com"
 ]
+
+STRONG_HIRING_REGEX = re.compile(
+    r"\b("
+    r"we['’]?re hiring|we are hiring|is hiring|are hiring|now hiring|urgently hiring|"
+    r"hiring\s*:|hiring for|looking to join\b.{0,50}\b(?:startup|team|company)|"
+    r"looking for\b.{0,65}\b(?:interns?|associates?|analysts?|managers?|engineers?|designers?|heads?|leads?|developers?|sales|executives?|specialists?|consultants?|candidates?|talent)|"
+    r"join our team|open role|open position|job opening|"
+    r"share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume)|drop (?:your )?(?:cv|resume)|"
+    r"reach out at|interested candidates please apply|application form in the comments"
+    r")\b",
+    re.IGNORECASE,
+)
+
+NON_HIRING_NOISE_REGEX = re.compile(
+    r"\b("
+    r"started a new position|happy to share that i|thrilled to announce|"
+    r"completed (?:a|my) certification|free webinar|live masterclass|"
+    r"subscribe to (?:my|our) newsletter|download our (?:ebook|guide)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def is_genuine_hiring_post(text: str, emails: list, form_links: list, external_links: list, comment_links: list) -> tuple:
+    """
+    Strictly verifies that a LinkedIn feed post is an active hiring post
+    matching real hiring announcements (emails, apply forms, lnkd.in links,
+    comment-form links, or explicit 'DM me'), filtering out unrelated noise posts.
+    """
+    low = (text or "").lower()
+    has_strong_hiring = bool(STRONG_HIRING_REGEX.search(low))
+    if not has_strong_hiring:
+        return False, []
+
+    if NON_HIRING_NOISE_REGEX.search(low) and not re.search(r"\b(we['’]?re hiring|we are hiring|hiring\s*:|apply here|share (?:your )?(?:cv|resume))\b", low):
+        return False, []
+
+    has_actionable = bool(
+        emails
+        or form_links
+        or external_links
+        or comment_links
+        or re.search(r"\b(dm me|send dm|message me|in the comments|reach out at|apply here|share (?:your )?(?:cv|resume)|send (?:your )?(?:cv|resume))\b", low)
+    )
+    if not has_actionable:
+        return False, []
+
+    tags = []
+    has_junior = any(k in low for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst"])
+    has_senior = any(k in low for k in ["5+ years", "6+ years", "7+ years", "8+ years", "10+ years", "head –", "head -", "director", "vp"])
+    if has_junior:
+        tags.append("Recruiting (0-3 Yrs)")
+    elif has_senior:
+        tags.append("Hiring (Experienced)")
+    else:
+        tags.append("Hiring Post")
+
+    if emails:
+        tags.append("Direct Email")
+    if form_links or comment_links or "comments" in low:
+        tags.append("Apply Link / Form")
+    elif "dm me" in low or "message me" in low:
+        tags.append("DM Hiring Lead")
+    return True, tags
 
 
 def extract_real_url(href: str) -> str:
@@ -315,16 +380,13 @@ class FeedHarvester:
                     if clean_m not in form_links:
                         form_links.append(clean_m)
 
-            # Check for senior experience disqualifier (e.g. 4+ yrs, 5+ yrs) unless junior/fresher terms present
-            has_junior = any(k in text_lower for k in ["0-2", "0-1", "1-2", "0-3", "1-3", "2-3", "fresher", "intern", "internship", "entry level", "graduate", "junior", "associate", "analyst"])
-            has_senior = any(k in text_lower for k in ["4+ years", "5+ years", "6+ years", "5-8 years", "7+ years", "8+ years", "10+ years", "senior manager", "principal", "director", "vp"])
-            if has_senior and not has_junior:
+            # Strict active-hiring filter: only capture real hiring posts (not generic commentary/tips)
+            is_hiring, hiring_tags = is_genuine_hiring_post(text, emails, form_links, external_links, comment_links)
+            if not is_hiring:
                 continue
-
-            if has_junior:
-                tags.append("Recruiting (0-2 Yrs)")
-            else:
-                tags.append("Recruiting")
+            for ht in hiring_tags:
+                if ht not in tags:
+                    tags.append(ht)
 
             # Extract Author from element metadata or text header
             author = item.get("author", "").strip()
@@ -362,10 +424,7 @@ class FeedHarvester:
                     search_kw = snip or "hiring"
                 post_url = f"https://www.linkedin.com/search/results/content/?keywords={urllib.parse.quote(search_kw)}"
 
-            has_keyword = any(kw in text_lower for kw in lead_keywords)
-            has_actionable = bool(emails or form_links or external_links or any(w in text_lower for w in ["dm", "comment", "email", "cv", "resume", "apply"]))
-            
-            if has_keyword and has_actionable:
+            if True:  # Already verified via is_genuine_hiring_post() above
                 record = {
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "author": author[:60],

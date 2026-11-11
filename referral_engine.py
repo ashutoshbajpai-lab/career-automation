@@ -375,7 +375,7 @@ class ReferralEngine:
                     more_btn.click(timeout=5000)
                     human_delay(0.8, 1.4)
                     connect_btn = page.locator(
-                        "[role='menu'] [role='menuitem'], [role='menu'] [aria-label*='Invite'][aria-label*='to connect'], div.artdeco-dropdown__content button, div.artdeco-dropdown__content a"
+                        "[role='menuitem'], div.artdeco-dropdown__content button, div.artdeco-dropdown__content a"
                     ).filter(has_text=re.compile(r"^\s*Connect\s*$")).locator("visible=true").first
                     if connect_btn.count() == 0:
                         connect_btn = page.locator("[aria-label*='Invite'][aria-label*='to connect']").locator("visible=true").first
@@ -383,8 +383,25 @@ class ReferralEngine:
             if connect_btn.count() == 0:
                 return False
 
+            connect_href = ""
+            try:
+                connect_href = connect_btn.get_attribute("href") or ""
+            except Exception:
+                pass
+
             connect_btn.click(timeout=5000)
-            human_delay(1.2, 2.2)
+            human_delay(1.2, 2.0)
+
+            modal_check = page.locator(
+                "button:has-text('Send without a note'), button:has-text('Add a note'), div[role='dialog'] input[type='email']"
+            ).locator("visible=true").count()
+            pending_now = hero.locator("button, a, span").filter(has_text=re.compile(r"^\s*Pending\s*$")).locator("visible=true").count()
+
+            # React <a role="menuitem" href="/preload/custom-invite/?vanityName=..."> links often close the popover without opening the dialog on click()
+            if modal_check == 0 and pending_now == 0 and "custom-invite" in connect_href:
+                full_invite_url = connect_href if connect_href.startswith("http") else f"https://www.linkedin.com{connect_href}"
+                page.goto(full_invite_url, wait_until="domcontentloaded")
+                human_delay(1.5, 2.5)
 
             # Abort gracefully if LinkedIn prompts for the recipient's email address
             if page.locator("div[role='dialog'] input[type='email'], div[role='dialog'] input[name='email']").count() > 0:

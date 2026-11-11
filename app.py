@@ -27,7 +27,7 @@ from werkzeug.utils import secure_filename
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-from browser_session import BrowserManager
+from browser_session import BrowserManager, is_cloud_low_mem, get_tree_ram_mb, wait_for_ram_cooldown
 from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
@@ -183,14 +183,11 @@ def get_stats():
     now_ist = datetime.now(IST)
     is_active_shift = 9 <= now_ist.hour < 19
     now_ts = time.time()
-    if now_ts - LAST_MEM_CHECK > 20:
-        try:
-            import psutil
-            p = psutil.Process(os.getpid())
-            CACHED_MEM_MB = round(p.memory_info().rss / 1024 / 1024, 1)
-            LAST_MEM_CHECK = now_ts
-        except Exception:
-            pass
+    if now_ts - LAST_MEM_CHECK > 10:
+        ram_val = get_tree_ram_mb()
+        if ram_val > 0:
+            CACHED_MEM_MB = ram_val
+        LAST_MEM_CHECK = now_ts
 
     has_li_at = False
     session_file = os.path.join(DATA_DIR, "session_cookies.json")
@@ -236,6 +233,7 @@ def get_stats():
         "scheduler_status": "Active (10h Shift 09:00 - 19:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
         "ist_time": now_ist.strftime("%H:%M:%S IST"),
         "ram_mb": CACHED_MEM_MB,
+        "cloud_mode": is_cloud_low_mem(),
         "linkedin_authenticated": has_li_at
     }
 
@@ -4018,7 +4016,16 @@ def execute_task(task_type):
     task_failed = False
     try:
         if task_type == "run_all":
-            add_log("🚀 MASTER AUTOPILOT ACTIVATED: Running all operations across Naukri, LinkedIn, and Gmail...")
+            cloud_mode = is_cloud_low_mem()
+            add_log(f"🚀 MASTER AUTOPILOT ACTIVATED ({'Cloud 512MB Safe Load Mode' if cloud_mode else 'Local Mode'}): Running sequential steps with RAM cooldown guards...")
+            wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=6.0, log_cb=add_log)
+
+            def _cloud_headroom_ok(step_label: str) -> bool:
+                ram = wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=6.0, log_cb=add_log)
+                if cloud_mode and ram > 430.0:
+                    add_log(f"⚠️ [LOAD MANAGER] RAM at {ram} MB (>430 MB safety ceiling). Deferring '{step_label}' cleanly to protect Render 512MB stability.")
+                    return False
+                return True
 
             # 1. Naukri Recency Boost
             add_log("[1/6] Launching Naukri Daily Recency Boost ('Updated: Today')...")
@@ -4029,74 +4036,87 @@ def execute_task(task_type):
             except Exception as e:
                 add_log(f"⚠️ [1/6] Naukri Boost notice: {e}")
 
-            # 2. Naukri 50+ Mass Apply with Questionnaire Handling
-            add_log("[2/6] Launching Naukri High-Volume Mass Apply (Target: 50+)...")
-            try:
-                naukri = NaukriAutomator()
-                res_apply = naukri.apply_jobs(daily_target=50)
-                add_log(f"✅ [2/6] Naukri Mass Apply finished! Applied: {res_apply.get('applied_count')}, Queued: {res_apply.get('manual_queued_count')}")
-            except Exception as e:
-                add_log(f"⚠️ [2/6] Naukri Apply notice: {e}")
+            # 2. Naukri Mass Apply (Scaled cleanly on 512MB Cloud)
+            naukri_target = 15 if cloud_mode else 50
+            naukri_pages = 2 if cloud_mode else 5
+            if _cloud_headroom_ok("[2/6] Naukri Mass Apply"):
+                add_log(f"[2/6] Launching Naukri Mass Apply (Target: {naukri_target}, Pages/Role: {naukri_pages})...")
+                try:
+                    naukri = NaukriAutomator()
+                    res_apply = naukri.apply_jobs(daily_target=naukri_target, max_pages_per_role=naukri_pages)
+                    add_log(f"✅ [2/6] Naukri Mass Apply finished! Applied: {res_apply.get('applied_count')}, Queued: {res_apply.get('manual_queued_count')}")
+                except Exception as e:
+                    add_log(f"⚠️ [2/6] Naukri Apply notice: {e}")
 
             # 3. LinkedIn Feed Harvester & Leads Dispatcher
-            add_log("[3/6] Harvesting LinkedIn Feed for Hiring Posts, Google Forms & Recruiter Emails...")
-            try:
-                mgr = BrowserManager(profile_name="linkedin")
+            feed_target = 40 if cloud_mode else 100
+            if _cloud_headroom_ok("[3/6] LinkedIn Feed Harvester"):
+                add_log(f"[3/6] Harvesting LinkedIn Feed (Target: {feed_target}+ posts)...")
                 try:
-                    context, page = mgr.get_context_and_page(force_headless=True)
-                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": 100}})
-                    state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
-                    harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
-                    new_leads = harvester.run()
-                    save_json_file(os.path.join(DATA_DIR, "state.json"), state)
-                    synced = sync_leads()
-                    add_log(f"✅ [3/6] Feed Harvest completed: {len(new_leads)} new leads found ({len(synced.get('forms', []))} forms, {len(synced.get('emails', []))} recruiter emails).")
-                finally:
-                    mgr.close()
-            except Exception as e:
-                add_log(f"⚠️ [3/6] Feed Harvest notice: {e}")
+                    mgr = BrowserManager(profile_name="linkedin")
+                    try:
+                        context, page = mgr.get_context_and_page(force_headless=True)
+                        config = load_json_file(os.path.join(BASE_DIR, "config.json"), {"limits": {"max_feed_posts_per_run": feed_target}})
+                        if cloud_mode:
+                            config.setdefault("limits", {})["max_feed_posts_per_run"] = feed_target
+                        state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_post_urns": []})
+                        harvester = FeedHarvester(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                        new_leads = harvester.run()
+                        save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                        synced = sync_leads()
+                        add_log(f"✅ [3/6] Feed Harvest completed: {len(new_leads)} new leads found ({len(synced.get('forms', []))} forms, {len(synced.get('emails', []))} recruiter emails).")
+                    finally:
+                        mgr.close()
+                except Exception as e:
+                    add_log(f"⚠️ [3/6] Feed Harvest notice: {e}")
 
             # 4. LinkedIn Job Scanner & Easy Apply
-            add_log("[4/6] Launching LinkedIn Easy Apply & Job Scanner...")
-            try:
-                mgr = BrowserManager(profile_name="linkedin")
+            if _cloud_headroom_ok("[4/6] LinkedIn Easy Apply"):
+                add_log("[4/6] Launching LinkedIn Easy Apply & Job Scanner...")
                 try:
-                    context, page = mgr.get_context_and_page(force_headless=True)
-                    config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
-                        "target_roles": ["Analyst", "Associate Product Manager"],
-                        "location": "India",
-                        "dry_run": False,
-                        "limits": {"max_jobs_evaluated_per_run": 10, "max_easy_applies_per_run": 2}
-                    })
-                    state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_job_ids": []})
-                    scanner = JobScanner(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
-                    res = scanner.run()
-                    save_json_file(os.path.join(DATA_DIR, "state.json"), state)
-                    add_log(f"✅ [4/6] LinkedIn Easy Apply completed (Applied: {len(res.get('easy_applied', []))}, Queued: {len(res.get('manual_queued', []))}).")
-                finally:
-                    mgr.close()
-            except Exception as e:
-                add_log(f"⚠️ [4/6] LinkedIn Easy Apply notice: {e}")
+                    mgr = BrowserManager(profile_name="linkedin")
+                    try:
+                        context, page = mgr.get_context_and_page(force_headless=True)
+                        config = load_json_file(os.path.join(BASE_DIR, "config.json"), {
+                            "target_roles": ["Analyst", "Associate Product Manager"],
+                            "location": "India",
+                            "dry_run": False,
+                            "limits": {"max_jobs_evaluated_per_run": 5 if cloud_mode else 10, "max_easy_applies_per_run": 2}
+                        })
+                        if cloud_mode:
+                            config.setdefault("limits", {})["max_jobs_evaluated_per_run"] = 5
+                        state = load_json_file(os.path.join(DATA_DIR, "state.json"), {"seen_job_ids": []})
+                        scanner = JobScanner(page=page, config=config, state=state, base_dir=BASE_DIR, log_cb=add_log)
+                        res = scanner.run()
+                        save_json_file(os.path.join(DATA_DIR, "state.json"), state)
+                        add_log(f"✅ [4/6] LinkedIn Easy Apply completed (Applied: {len(res.get('easy_applied', []))}, Queued: {len(res.get('manual_queued', []))}).")
+                    finally:
+                        mgr.close()
+                except Exception as e:
+                    add_log(f"⚠️ [4/6] LinkedIn Easy Apply notice: {e}")
 
-            # 5. Regional Companies & Startups Network Expander (Mumbai & Startups)
-            add_log("[5/6] Searching Mumbai Companies & Startups (Jobs Search + Connection Requests Only, NO NOTE)...")
-            try:
-                expander = CompanyNetworkExpander()
-                res_expand = expander.run_company_expansion(max_companies=3, max_connects_per_company=2)
-                add_log(f"✅ [5/6] Company Expander complete: Checked {res_expand.get('companies_processed')} companies, found {res_expand.get('jobs_found')} aligned jobs, sent {res_expand.get('connections_sent')} connection requests (No note).")
-            except Exception as e:
-                add_log(f"⚠️ [5/6] Company Expander notice: {e}")
+            # 5. Regional Companies & Startups Network Expander
+            if _cloud_headroom_ok("[5/6] Company Expander"):
+                add_log("[5/6] Searching Mumbai Companies & Startups (Connection Requests Only, NO NOTE)...")
+                try:
+                    expander = CompanyNetworkExpander()
+                    res_expand = expander.run_company_expansion(max_companies=2 if cloud_mode else 3, max_connects_per_company=2)
+                    add_log(f"✅ [5/6] Company Expander complete: Checked {res_expand.get('companies_processed')} companies, found {res_expand.get('jobs_found')} aligned jobs, sent {res_expand.get('connections_sent')} connection requests (No note).")
+                except Exception as e:
+                    add_log(f"⚠️ [5/6] Company Expander notice: {e}")
 
             # 6. Full Gmail Inbox Subject-Line Analysis
-            add_log("[6/6] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
-            try:
-                tracker = EmailTracker()
-                intel = tracker.scan_full_inbox()
-                passed = tracker.get_screening_passed()
-                add_log(f"✅ [6/6] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
-            except Exception as e:
-                add_log(f"⚠️ [6/6] Gmail notice: {e}")
+            if _cloud_headroom_ok("[6/6] Gmail Inbox Sweep"):
+                add_log("[6/6] Sweeping Full Gmail Inbox for Screening Cleared, Exam Dates & Test Links...")
+                try:
+                    tracker = EmailTracker()
+                    intel = tracker.scan_full_inbox()
+                    passed = tracker.get_screening_passed()
+                    add_log(f"✅ [6/6] Gmail Inbox Sweep completed! Categorized {len(intel)} career emails ({len(passed)} screening cleared).")
+                except Exception as e:
+                    add_log(f"⚠️ [6/6] Gmail notice: {e}")
 
+            wait_for_ram_cooldown(soft_limit_mb=350.0, max_wait_sec=4.0, log_cb=add_log)
             add_log("🎉 ALL OPERATIONS FINISHED SUCCESSFULLY! All dashboard metrics, queues, and tables updated.")
 
         elif task_type == "company_connect":

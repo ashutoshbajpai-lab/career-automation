@@ -10,7 +10,7 @@ import json
 import logging
 import urllib.parse
 from datetime import datetime
-from browser_session import human_delay, smooth_scroll
+from browser_session import human_delay, smooth_scroll, is_cloud_low_mem, get_tree_ram_mb
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +97,18 @@ class FeedHarvester:
             self._log("🌐 Activating Instant Public Jobs Engine (Harvesting 0-2 Yrs Analyst & PM Roles across India)...")
             return self._harvest_public_guest_jobs()
 
-        target_posts = int(self.config.get("limits", {}).get("max_feed_posts_per_run", 100))
-        if target_posts < 100:
+        low_mem = is_cloud_low_mem()
+        default_target = 40 if low_mem else 100
+        target_posts = int(self.config.get("limits", {}).get("max_feed_posts_per_run", default_target))
+        if low_mem:
+            target_posts = min(target_posts, 40)
+        elif target_posts < 100:
             target_posts = 100
 
-        self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts...")
+        self._log(f"🚀 Starting deep feed harvester: targeting at least {target_posts}+ posts (LowMem={low_mem})...")
         seen_card_hashes = set()
         raw_items = []
-        max_scroll_passes = 120
+        max_scroll_passes = 30 if low_mem else 120
 
         for scroll_i in range(1, max_scroll_passes + 1):
             try:
@@ -235,9 +239,12 @@ class FeedHarvester:
                 self._log(f"Progress: Pass {scroll_i}/{max_scroll_passes} - Scrolled through {len(raw_items)} distinct posts so far...")
 
             human_delay(0.9, 1.3)
-            if scroll_i % 15 == 0:
+            if scroll_i % 10 == 0:
                 import gc
                 gc.collect()
+                if low_mem and get_tree_ram_mb() > 410.0:
+                    self._log(f"⚠️ [LOAD MANAGER] Cloud RAM reached {get_tree_ram_mb()} MB at pass {scroll_i} — stopping scroll cleanly.")
+                    break
 
         self._log(f"Analyzed feed: Successfully extracted {len(raw_items)} distinct post cards. Filtering for opportunities...")
 

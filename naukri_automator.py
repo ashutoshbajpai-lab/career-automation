@@ -14,7 +14,7 @@ import json
 import logging
 from datetime import datetime
 from urllib.parse import quote_plus
-from browser_session import BrowserManager, human_delay
+from browser_session import BrowserManager, human_delay, is_cloud_low_mem, get_tree_ram_mb
 
 logger = logging.getLogger("NaukriAutomator")
 
@@ -251,7 +251,7 @@ class NaukriAutomator:
         finally:
             self.browser_mgr.close()
 
-    def apply_jobs(self, target_roles: list = None, daily_target: int = 50) -> dict:
+    def apply_jobs(self, target_roles: list = None, daily_target: int = 50, max_pages_per_role: int = None) -> dict:
         """
         Searches Naukri for target roles and applies directly (up to daily_target, 50+).
         External company site / Workday / Oracle / MNC redirects are logged to the manual queue.
@@ -264,31 +264,38 @@ class NaukriAutomator:
                 "Associate Analyst", "Management Trainee", "Growth Analyst"
             ]
 
-        logger.info(f"Starting Naukri High-Volume Auto-Apply (Target: {daily_target} applications)...")
+        low_mem = is_cloud_low_mem()
+        if max_pages_per_role is None:
+            max_pages_per_role = 2 if low_mem else 5
+
+        logger.info(f"Starting Naukri High-Volume Auto-Apply (Target: {daily_target}, Pages/Role: {max_pages_per_role}, LowMem={low_mem})...")
         headed_mode = False if os.environ.get("DISPLAY") else None
         context, page = self.browser_mgr.get_context_and_page(force_headless=headed_mode)
 
         applied_list = []
         manual_list = []
+        visited_jobs = 0
+        mem_limit_hit = False
         seen_job_urls = self._get_seen_urls()
         logger.info(f"Loaded {len(seen_job_urls)} already-processed job URLs to skip duplicates.")
 
         try:
             page.set_default_timeout(15000)
+            blocked_types = ["image", "media", "font"] if low_mem else ["media"]
             try:
-                page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
+                page.route("**/*", lambda route: route.abort() if route.request.resource_type in blocked_types else route.continue_())
             except Exception:
                 pass
 
             for role in target_roles:
-                if len(applied_list) >= daily_target:
+                if len(applied_list) >= daily_target or mem_limit_hit:
                     break
                 import gc
                 gc.collect()
 
                 slug = quote_plus(role.lower().replace(' ', '-'))
-                for page_num in range(1, 6):  # Check up to 5 pages per role with direct URL pagination
-                    if len(applied_list) >= daily_target:
+                for page_num in range(1, max_pages_per_role + 1):
+                    if len(applied_list) >= daily_target or mem_limit_hit:
                         break
 
                     page_suffix = f"-{page_num}" if page_num > 1 else ""
@@ -437,6 +444,18 @@ class NaukriAutomator:
                                     logger.info(f"SUCCESS: Submitted Naukri application ({len(applied_list)}/{daily_target})!")
 
                                 human_delay(1.5, 3.0)
+                                visited_jobs += 1
+                                if visited_jobs % 10 == 0:
+                                    try:
+                                        page.goto("about:blank")
+                                    except Exception:
+                                        pass
+                                    import gc
+                                    gc.collect()
+                                    if low_mem and get_tree_ram_mb() > 410.0:
+                                        logger.warning(f"⚠️ [LOAD MANAGER] Cloud RAM reached {get_tree_ram_mb()} MB during Naukri sweep — stopping batch safely.")
+                                        mem_limit_hit = True
+                                        break
 
                         except Exception as e:
                             logger.debug(f"Error applying to {title}: {e}")

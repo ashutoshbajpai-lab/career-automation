@@ -22,6 +22,48 @@ PROFILE_DIR = os.path.join(BASE_DIR, "chrome_profile")
 BROWSER_LOCK = threading.Lock()
 
 
+def is_cloud_low_mem() -> bool:
+    """Detects 512MB Render cloud container or explicit LOW_MEM_MODE=1 testing."""
+    return bool(
+        os.environ.get("RENDER")
+        or os.environ.get("RENDER_SERVICE_ID")
+        or os.environ.get("RENDER_EXTERNAL_URL")
+        or os.environ.get("LOW_MEM_MODE") == "1"
+    )
+
+
+def get_tree_ram_mb() -> float:
+    """Returns total RSS memory in MB for Python process plus all Chromium child processes."""
+    try:
+        import psutil
+        proc = psutil.Process(os.getpid())
+        total = proc.memory_info().rss
+        for child in proc.children(recursive=True):
+            try:
+                total += child.memory_info().rss
+            except Exception:
+                pass
+        return round(total / (1024 * 1024), 1)
+    except Exception:
+        return 0.0
+
+
+def wait_for_ram_cooldown(soft_limit_mb: float = 350.0, max_wait_sec: float = 6.0, log_cb=None) -> float:
+    """Runs garbage collection and briefly waits if child Chromium RSS is still winding down."""
+    import gc
+    gc.collect()
+    ram = get_tree_ram_mb()
+    waited = 0.0
+    while ram > soft_limit_mb and waited < max_wait_sec:
+        time.sleep(1.0)
+        waited += 1.0
+        gc.collect()
+        ram = get_tree_ram_mb()
+    if log_cb and ram > 0:
+        log_cb(f"📊 [LOAD MANAGER] Active Tree RAM: {ram} MB ({'Cloud 512MB Mode' if is_cloud_low_mem() else 'Local Mode'})")
+    return ram
+
+
 def human_delay(min_sec: float = 2.0, max_sec: float = 4.5):
     """Sleep with randomized jitter to emulate human reading/scrolling."""
     duration = random.uniform(min_sec, max_sec)
@@ -134,7 +176,9 @@ class BrowserManager:
                 "--disable-component-update",
                 "--disable-sync",
                 "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,Translate,OptimizationHints,MediaRouter,BackForwardCache",
-                "--js-flags=--max-old-space-size=160 --optimize_for_size"
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                f"--js-flags=--max-old-space-size={'128' if is_cloud_low_mem() else '160'} --optimize_for_size"
             ]
         }
         if os.path.exists(chrome_executable):

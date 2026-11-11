@@ -5,5 +5,7 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# Session cookies kept private (passed via Render environment variable)
+# Session cookies & credentials kept private (never committed)
 data/session_cookies.json
+data/linkedin_credentials.json
+.env

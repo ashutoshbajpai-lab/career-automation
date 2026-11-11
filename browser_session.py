@@ -187,25 +187,28 @@ class BrowserManager:
         logger.info(f"Launching Playwright context (profile={self.profile_name}, headless={is_headless}, DISPLAY={os.environ.get('DISPLAY', 'None')})...")
         self.context = self.playwright.chromium.launch_persistent_context(**launch_kwargs)
 
-        # Automatically inject session cookies if present
+        # Automatically inject session cookies only if active (do not inject known-expired cookies)
         session_file = os.path.join(BASE_DIR, "data", "session_cookies.json")
         cookies = []
+        sdata = {}
         if os.path.exists(session_file):
             try:
                 with open(session_file, "r", encoding="utf-8") as f:
                     sdata = json.load(f)
-                cookies = sdata.get("cookies", [])
+                if sdata.get("status") != "expired":
+                    cookies = sdata.get("cookies", [])
             except Exception as e:
                 logger.warning(f"Failed to auto-inject cookies from file: {e}")
 
         # Fallback to SESSION_COOKIES_BASE64 if file missing or empty
-        if not cookies:
+        if not cookies and sdata.get("status") != "expired":
             env_b64 = os.environ.get("SESSION_COOKIES_BASE64", "")
             if env_b64:
                 try:
                     import base64
                     sdata = json.loads(base64.b64decode(env_b64.strip()).decode("utf-8"))
-                    cookies = sdata.get("cookies", [])
+                    if sdata.get("status") != "expired":
+                        cookies = sdata.get("cookies", [])
                 except Exception as e:
                     logger.warning(f"Failed to decode SESSION_COOKIES_BASE64: {e}")
 
@@ -306,36 +309,161 @@ class BrowserManager:
         except Exception as e:
             logger.debug(f"Could not mark session_cookies.json expired: {e}")
 
+    @staticmethod
+    def _load_linkedin_credentials() -> tuple:
+        """Loads explicit LinkedIn email/password from env vars or gitignored local credentials file."""
+        email = (os.environ.get("LINKEDIN_EMAIL") or "").strip()
+        password = os.environ.get("LINKEDIN_PASSWORD") or ""
+        if email and password:
+            return email, password
+        cred_file = os.path.join(BASE_DIR, "data", "linkedin_credentials.json")
+        if os.path.exists(cred_file):
+            try:
+                with open(cred_file, "r", encoding="utf-8") as f:
+                    cdata = json.load(f)
+                return (cdata.get("email") or "").strip(), (cdata.get("password") or "")
+            except Exception:
+                pass
+        return "", ""
+
+    def _export_active_cookies(self):
+        """Exports the active browser context's cookies to data/session_cookies.json cleanly."""
+        session_file = os.path.join(BASE_DIR, "data", "session_cookies.json")
+        try:
+            existing_other = []
+            if os.path.exists(session_file):
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        prev = json.load(f).get("cookies", [])
+                    existing_other = [c for c in prev if "linkedin" not in (c.get("domain") or "").lower()]
+                except Exception:
+                    existing_other = []
+
+            li_cookies = self.context.cookies(["https://www.linkedin.com"])
+            merged = existing_other + li_cookies
+            payload = {
+                "status": "active",
+                "exported_at": time.strftime("%a %b %d %H:%M:%S %Z %Y"),
+                "cookies": merged,
+            }
+            os.makedirs(os.path.dirname(session_file), exist_ok=True)
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            logger.info(f"Saved {len(merged)} active session cookies to data/session_cookies.json.")
+        except Exception as e:
+            logger.warning(f"Could not export active cookies: {e}")
+
     def ensure_logged_in(self, page, timeout_sec: int = 300) -> bool:
         """
-        Deterministic check for LinkedIn authentication using the official li_at cookie.
-        Verifies live validity when non-CDP cookies are used so stale cookies are caught immediately.
+        Ensures LinkedIn is logged in:
+        1. Reuses active Chrome/session li_at cookie if valid.
+        2. If missing/expired, signs in with configured LinkedIn email & password credentials.
+        3. Never bypasses CAPTCHAs/2FA checkpoints — pauses/reports cleanly if triggered.
         """
         cookies = self.context.cookies(["https://www.linkedin.com"])
         li_at_cookies = [c for c in cookies if c["name"] == "li_at" and c.get("value")]
         if li_at_cookies:
-            if not self.is_cdp and not any(self.probe_li_at_valid(c["value"]) for c in li_at_cookies):
-                logger.warning("Saved li_at cookie failed live /feed/ check (expired/revoked).")
-                self.mark_session_expired("live_feed_check_failed")
-                return False
-            logger.info("Session verified: User is logged in to LinkedIn (li_at cookie active).")
-            return True
+            if self.is_cdp or any(self.probe_li_at_valid(c["value"]) for c in li_at_cookies):
+                logger.info("Session verified: User is logged in to LinkedIn (li_at cookie active).")
+                return True
+            logger.warning("Existing li_at cookie expired/revoked — refreshing via LinkedIn credentials login...")
+            self.mark_session_expired("stale_li_at_refresh")
 
-        logger.info("=" * 65)
-        logger.info("ACTION REQUIRED: A Google Chrome window is open on your screen.")
-        logger.info("Please log in to your LinkedIn account in that browser window.")
-        logger.info(f"Waiting up to {timeout_sec} seconds for you to sign in...")
-        logger.info("=" * 65)
+        # Clear stale LinkedIn cookies before fresh credential sign-in
+        try:
+            import re
+            self.context.clear_cookies(domain=re.compile(r"linkedin\.com$"))
+        except Exception:
+            pass
+
+        email, password = self._load_linkedin_credentials()
+        if email and password:
+            logger.info(f"Signing in to LinkedIn with configured account ({email})...")
+            try:
+                page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
+                human_delay(1.2, 2.0)
+
+                # Guard if already redirected to /feed by persistent profile
+                if any(p in (page.url or "").lower() for p in ("/feed", "/mynetwork", "/in/", "/jobs")):
+                    self._export_active_cookies()
+                    return True
+
+                import re
+                user_inp = page.locator("input#username, input[name='session_key'], input[type='email'], input[autocomplete='username']").locator("visible=true").first
+                pass_inp = page.locator("input#password, input[name='session_password'], input[type='password']").locator("visible=true").first
+                submit_btn = page.locator("button").filter(has_text=re.compile(r"^\s*Sign in\s*$")).locator("visible=true").first
+                if submit_btn.count() == 0:
+                    submit_btn = page.locator("button[type='submit']").locator("visible=true").first
+
+                if user_inp.count() > 0 and pass_inp.count() > 0:
+                    user_inp.click()
+                    page.keyboard.press("ControlOrMeta+a")
+                    page.keyboard.press("Backspace")
+                    user_inp.fill(email)
+                    human_delay(0.4, 0.8)
+                    pass_inp.click()
+                    page.keyboard.press("ControlOrMeta+a")
+                    page.keyboard.press("Backspace")
+                    pass_inp.fill(password)
+                    human_delay(0.5, 1.0)
+                    if submit_btn.count() > 0:
+                        submit_btn.click()
+                    else:
+                        pass_inp.press("Enter")
+
+                    # Wait cleanly up to 15s for login result
+                    for _ in range(15):
+                        time.sleep(1.0)
+                        cur_url = (page.url or "").lower()
+                        try:
+                            body_low = (page.locator("body").inner_text() or "").lower()
+                            if "wrong email or password" in body_low or "couldn't find a linkedin account" in body_low:
+                                logger.error("⚠️ LinkedIn rejected the configured email or password ('Wrong email or password'). Please double-check your LinkedIn credentials.")
+                                return False
+                        except Exception:
+                            pass
+                        if any(k in cur_url for k in ("checkpoint", "challenge", "captcha")):
+                            logger.warning("⚠️ LinkedIn triggered a 2FA / checkpoint verification challenge during sign-in. Complete verification once cleanly in Chrome (not bypassed).")
+                            self.mark_session_expired("checkpoint_verification_required")
+                            if os.environ.get("DISPLAY") or timeout_sec > 20:
+                                logger.info(f"Waiting up to {timeout_sec}s for manual verification in visible browser...")
+                                break
+                            return False
+                        if any(p in cur_url for p in ("/feed", "/mynetwork", "/in/", "/jobs")):
+                            cookies_now = self.context.cookies(["https://www.linkedin.com"])
+                            if any(c["name"] == "li_at" and c.get("value") for c in cookies_now):
+                                self._export_active_cookies()
+                                logger.info("✅ LinkedIn credential login succeeded cleanly!")
+                                return True
+
+                    cur_url = (page.url or "").lower()
+                    if any(k in cur_url for k in ("checkpoint", "challenge", "captcha")):
+                        self.mark_session_expired("checkpoint_verification_required")
+                        return False
+                    cookies_now = self.context.cookies(["https://www.linkedin.com"])
+                    if any(c["name"] == "li_at" and c.get("value") for c in cookies_now):
+                        self._export_active_cookies()
+                        logger.info("✅ LinkedIn credential login succeeded cleanly!")
+                        return True
+                    logger.warning(f"LinkedIn login landed on unexpected URL: {page.url}")
+                    return False
+            except Exception as e:
+                logger.warning(f"Credential login attempt error: {e}")
+
+        logger.info("Manual LinkedIn sign-in required — waiting up to timeout if browser is interactive...")
+        if not os.environ.get("DISPLAY") and timeout_sec <= 20:
+            return False
 
         page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
-
         start = time.time()
         while time.time() - start < timeout_sec:
             time.sleep(2)
             cookies = self.context.cookies(["https://www.linkedin.com"])
-            if any(c["name"] == "li_at" for c in cookies):
+            cur_url = (page.url or "").lower()
+            if any(c["name"] == "li_at" and c.get("value") for c in cookies) and not any(x in cur_url for x in ("/login", "/checkpoint", "/challenge")):
+                self._export_active_cookies()
                 logger.info("SUCCESS: Login detected! Authentication session saved.")
-                time.sleep(2)
+                time.sleep(1.5)
                 return True
 
         logger.error("Timed out waiting for LinkedIn sign in.")

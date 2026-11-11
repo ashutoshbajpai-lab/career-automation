@@ -178,7 +178,7 @@ class BrowserManager:
                 "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process,Translate,OptimizationHints,MediaRouter,BackForwardCache",
                 "--disable-background-timer-throttling",
                 "--disable-renderer-backgrounding",
-                f"--js-flags=--max-old-space-size={'128' if is_cloud_low_mem() else '160'} --optimize_for_size"
+                f"--js-flags=--max-old-space-size={'256' if is_cloud_low_mem() else '512'} --optimize_for_size"
             ]
         }
         if os.path.exists(chrome_executable):

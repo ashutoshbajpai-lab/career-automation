@@ -356,48 +356,71 @@ class ReferralEngine:
 
     def _send_connection_request(self, page, note_text: str = "") -> bool:
         """
-        Sends connection request.
-        If note_text is empty (default), sends clean connection request WITHOUT any note.
-        Only adds a note if note_text is explicitly provided.
+        Sends connection request cleanly:
+        - Strictly scopes to the hero section (`main section`) so sidebar ads/cards never match or hang.
+        - Supports both direct Connect button and LinkedIn React `More` dropdown (`<a role="menuitem">Connect</a>`).
+        - If note_text is empty (default), sends clean connection request WITHOUT any note.
         """
         try:
-            connect_btn = page.locator("button:has-text('Connect'), button[aria-label*='Invite'][aria-label*='to connect']").first
-            if connect_btn.count() == 0 or not connect_btn.is_visible():
-                more_btn = page.locator("main section button:has-text('More'), main button[aria-label='More actions']").first
-                if more_btn.count() > 0 and more_btn.is_visible():
-                    more_btn.click()
-                    human_delay(0.8, 1.5)
-                    connect_btn = page.locator("div.artdeco-dropdown__content button:has-text('Connect'), [role='menuitem']:has-text('Connect')").first
+            hero = page.locator("main section").first
+            connect_btn = hero.locator("button, a").filter(has_text=re.compile(r"^\s*Connect\s*$")).locator("visible=true").first
+            if connect_btn.count() == 0:
+                connect_btn = hero.locator("[aria-label*='Invite'][aria-label*='to connect']").locator("visible=true").first
+
+            if connect_btn.count() == 0:
+                more_btn = hero.locator("button, a").filter(has_text=re.compile(r"^\s*More\s*$")).locator("visible=true").first
+                if more_btn.count() == 0:
+                    more_btn = hero.locator("button[aria-label='More actions']").locator("visible=true").first
+                if more_btn.count() > 0:
+                    more_btn.click(timeout=5000)
+                    human_delay(0.8, 1.4)
+                    connect_btn = page.locator(
+                        "[role='menu'] [role='menuitem'], [role='menu'] [aria-label*='Invite'][aria-label*='to connect'], div.artdeco-dropdown__content button, div.artdeco-dropdown__content a"
+                    ).filter(has_text=re.compile(r"^\s*Connect\s*$")).locator("visible=true").first
+                    if connect_btn.count() == 0:
+                        connect_btn = page.locator("[aria-label*='Invite'][aria-label*='to connect']").locator("visible=true").first
 
             if connect_btn.count() == 0:
                 return False
 
-            connect_btn.click()
-            human_delay(1.5, 2.5)
+            connect_btn.click(timeout=5000)
+            human_delay(1.2, 2.2)
+
+            # Abort gracefully if LinkedIn prompts for the recipient's email address
+            if page.locator("div[role='dialog'] input[type='email'], div[role='dialog'] input[name='email']").count() > 0:
+                dismiss = page.locator("div[role='dialog'] button[aria-label*='Dismiss'], div[role='dialog'] button:has-text('Cancel')").first
+                if dismiss.count() > 0:
+                    dismiss.click(timeout=3000)
+                return False
 
             # Option A: Clean connection request with NO note (User requested: connection request only)
             if not note_text:
-                send_no_note = page.locator("button:has-text('Send without a note'), button[aria-label*='Send without a note'], button:has-text('Send now'), button[aria-label='Send now']").first
-                if send_no_note.count() > 0 and send_no_note.is_visible():
-                    send_no_note.click()
-                    human_delay(1.5, 2.0)
+                send_no_note = page.locator(
+                    "button:has-text('Send without a note'), button[aria-label*='Send without a note'], button:has-text('Send now'), button[aria-label='Send now']"
+                ).locator("visible=true").first
+                if send_no_note.count() > 0:
+                    send_no_note.click(timeout=5000)
+                    human_delay(1.2, 1.8)
+                    return True
+                # Some LinkedIn layouts invite directly on Connect click without a modal
+                if hero.locator("button, a, span").filter(has_text=re.compile(r"^\s*Pending\s*$")).locator("visible=true").count() > 0:
                     return True
 
             # Option B: Add a note only when note_text is explicitly passed
             if note_text:
-                add_note_btn = page.locator("button:has-text('Add a note'), button[aria-label='Add a note']").first
-                if add_note_btn.count() > 0 and add_note_btn.is_visible():
-                    add_note_btn.click()
-                    human_delay(0.8, 1.5)
-                    textarea = page.locator("textarea[name='message'], textarea#custom-message").first
+                add_note_btn = page.locator("button:has-text('Add a note'), button[aria-label='Add a note']").locator("visible=true").first
+                if add_note_btn.count() > 0:
+                    add_note_btn.click(timeout=5000)
+                    human_delay(0.8, 1.4)
+                    textarea = page.locator("textarea[name='message'], textarea#custom-message").locator("visible=true").first
                     if textarea.count() > 0:
                         textarea.fill(note_text)
-                        human_delay(1.0, 1.5)
+                        human_delay(0.8, 1.2)
 
-            send_btn = page.locator("button:has-text('Send'), button[aria-label='Send invitation'], button[aria-label='Send now']").first
-            if send_btn.count() > 0 and send_btn.is_visible():
-                send_btn.click()
-                human_delay(1.5, 2.0)
+            send_btn = page.locator("div[role='dialog'] button:has-text('Send'), button[aria-label='Send invitation'], button[aria-label='Send now']").locator("visible=true").first
+            if send_btn.count() > 0:
+                send_btn.click(timeout=5000)
+                human_delay(1.2, 1.8)
                 return True
             return False
         except Exception:

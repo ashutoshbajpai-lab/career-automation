@@ -831,6 +831,10 @@ class MumbaiOutreachEngine:
                             auth_failed = True
                             return False
                         try:
+                            page.wait_for_selector("main a[href*='/in/']", timeout=5000)
+                        except Exception:
+                            pass
+                        try:
                             smooth_scroll(page, total_pixels=900, steps=2)
                         except Exception:
                             pass
@@ -862,8 +866,15 @@ class MumbaiOutreachEngine:
                 if auth_failed or rate_limited:
                     break
 
-                # Pass B: Compact Boolean OR People Search (3-4 pages total instead of 15+ rapid searches)
-                or_terms = " OR ".join([f'"{k}"' if " " in k else k for k in kw_list[:6]])
+                # Pass B: Compact Boolean OR People Search (clean single keywords avoid quote/apostrophe parser bugs)
+                sanitized_kws = []
+                for k in kw_list[:6]:
+                    clean_k = re.sub(r"[^a-zA-Z0-9\s]", " ", k).strip()
+                    if "founder" in clean_k.lower():
+                        clean_k = "Founder"
+                    if clean_k and clean_k not in sanitized_kws:
+                        sanitized_kws.append(clean_k)
+                or_terms = " OR ".join([f'"{k}"' if " " in k else k for k in (sanitized_kws or ["Product", "Analyst", "HR", "Founder"])])
                 bool_query = f'"{comp_name}" ({or_terms})'
                 for pg in range(1, 5):  # Up to 4 paginated pages (~40 targeted people)
                     if company_found >= limit_per_company or company_found >= min_contacts_per_company or auth_failed or rate_limited:
@@ -1111,6 +1122,18 @@ class MumbaiOutreachEngine:
                         self.save_contacts(all_contacts)
                 except Exception as e:
                     err_s = str(e)
+                    if "Page crashed" in err_s or "Target" in err_s:
+                        log(f"⚠️ Browser tab crashed on {name} — recovering fresh tab cleanly and continuing...")
+                        try:
+                            page.close()
+                        except Exception:
+                            pass
+                        try:
+                            page = context.new_page()
+                            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
+                        except Exception:
+                            break
+                        continue
                     if "ERR_TOO_MANY_REDIRECTS" in err_s:
                         log("⚠️ Hit ERR_TOO_MANY_REDIRECTS in connect cycle — marking session expired & saving progress.")
                         self.browser_mgr.mark_session_expired("connect_redirect_loop")
@@ -1214,6 +1237,18 @@ class MumbaiOutreachEngine:
                     human_delay(2.0, 3.5)
                 except Exception as e:
                     err_s = str(e)
+                    if "Page crashed" in err_s or "Target" in err_s:
+                        log(f"⚠️ Browser tab crashed messaging {name} — recovering fresh tab cleanly...")
+                        try:
+                            page.close()
+                        except Exception:
+                            pass
+                        try:
+                            page = context.new_page()
+                            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["media"] else route.continue_())
+                        except Exception:
+                            break
+                        continue
                     if "ERR_TOO_MANY_REDIRECTS" in err_s:
                         log("⚠️ Hit ERR_TOO_MANY_REDIRECTS in Send Messages — marking session expired & saving.")
                         self.browser_mgr.mark_session_expired("send_redirect_loop")

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Dashboard — Enterprise Redesign</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 & Babel for standalone JSX runtime -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Inter Font & Font Awesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen antialiased selection:bg-slate-900 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // --- Mock Data Multi-Timeframe ---
+    const DATA_BY_PERIOD = {
+      today: {
+        tasks: [
+          { id: 1, title: 'BrightBridge website design', project: 'BrightBridge', due: 'Today', status: 'in_progress', owner: 'Alex' },
+          { id: 2, title: 'Upload development files', project: 'GitHub', due: 'Today', status: 'in_progress', owner: 'Sarah' },
+          { id: 3, title: 'Client sprint review', project: 'Acme', due: 'Today', status: 'completed', owner: 'Alex' },
+          { id: 4, title: 'Database schema migration', project: 'Platform', due: 'Today', status: 'not_started', owner: 'Dev' },
+        ],
+        projects: { not_started: 12, in_progress: 18, completed: 8 },
+        finance: {
+          income: 4200,
+          expense: 1850,
+          trend: [
+            { label: '09:00', income: 800, expense: 300 },
+            { label: '11:00', income: 1400, expense: 600 },
+            { label: '13:00', income: 2100, expense: 950 },
+            { label: '15:00', income: 3200, expense: 1400 },
+            { label: '17:00', income: 4200, expense: 1850 },
+          ]
+        },
+        invoices: {
+          overdue: { count: 1, amount: 2400 },
+          due: { count: 3, amount: 8900 },
+          paid: { count: 6, amount: 14500 }
+        }
+      },
+      week: {
+        tasks: [
+          { id: 1, title: 'BrightBridge website design', project: 'BrightBridge', due: 'Thu', status: 'in_progress', owner: 'Alex' },
+          { id: 2, title: 'Upload development files', project: 'GitHub', due: 'Wed', status: 'in_progress', owner: 'Sarah' },
+          { id: 5, title: 'Design system typography audit', project: 'Internal', due: 'Fri', status: 'not_started', owner: 'Elena' },
+          { id: 6, title: 'Q3 Financial close reconciliation', project: 'Finance', due: 'Tue', status: 'completed', owner: 'David' },
+          { id: 7, title: 'Security penetration review', project: 'Security', due: 'Fri', status: 'not_started', owner: 'Security' }
+        ],
+        projects: { not_started: 24, in_progress: 36, completed: 22 },
+        finance: {
+          income: 28400,
+          expense: 14200,
+          trend: [
+            { label: 'Mon', income: 4200, expense: 2100 },
+            { label: 'Tue', income: 9800, expense: 4800 },
+            { label: 'Wed', income: 15400, expense: 7600 },
+            { label: 'Thu', income: 21000, expense: 11000 },
+            { label: 'Fri', income: 28400, expense: 14200 },
+          ]
+        },
+        invoices: {
+          overdue: { count: 3, amount: 14800 },
+          due: { count: 8, amount: 42300 },
+          paid: { count: 19, amount: 89400 }
+        }
+      },
+      month: {
+        tasks: [
+          { id: 1, title: 'BrightBridge website design', project: 'BrightBridge', due: '18 Nov', status: 'in_progress', owner: 'Alex' },
+          { id: 2, title: 'Upload development files', project: 'GitHub', due: '20 Nov', status: 'in_progress', owner: 'Sarah' },
+          { id: 8, title: 'Core API latency optimization', project: 'Infra', due: '25 Nov', status: 'in_progress', owner: 'Liam' },
+          { id: 9, title: 'SaaS onboarding funnel redesign', project: 'Product', due: '28 Nov', status: 'not_started', owner: 'Alex' },
+          { id: 10, title: 'Vendor contract renewals', project: 'Legal', due: '30 Nov', status: 'completed', owner: 'Elena' }
+        ],
+        projects: { not_started: 54, in_progress: 14, completed: 32 },
+        finance: {
+          income: 146800,
+          expense: 73290,
+          trend: [
+            { label: 'Jan', income: 18200, expense: 9400 },
+            { label: 'Feb', income: 24600, expense: 13290 },
+            { label: 'Mar', income: 21400, expense: 11800 },
+            { label: 'Apr', income: 29800, expense: 14900 },
+            { label: 'May', income: 26100, expense: 12100 },
+            { label: 'Jun', income: 26700, expense: 11800 },
+          ]
+        },
+        invoices: {
+          overdue: { count: 5, amount: 18300 },
+          due: { count: 12, amount: 64200 },
+          paid: { count: 48, amount: 164300 }
+        }
+      }
+    };
+
+    function App() {
+      const [period, setPeriod] = useState('month'); // 'today' | 'week' | 'month'
+      const [searchQuery, setSearchQuery] = useState('');
+      const [tasksState, setTasksState] = useState(DATA_BY_PERIOD);
+      const [taskTab, setTaskTab] = useState('all'); // 'all' | 'active' | 'completed'
+      const [activeNav, setActiveNav] = useState('dashboard');
+      const [isSimLoading, setIsSimLoading] = useState(false);
+
+      const currentData = tasksState[period];
+
+      // Switch period with feedback
+      const handlePeriodChange = (p) => {
+        setIsSimLoading(true);
+        setPeriod(p);
+        setTimeout(() => setIsSimLoading(false), 200);
+      };
+
+      // Toggle Task Completion
+      const toggleTask = (taskId) => {
+        setTasksState(prev => {
+          const updatedPeriodTasks = prev[period].tasks.map(t => {
+            if (t.id === taskId) {
+              const newStatus = t.status === 'completed' ? 'in_progress' : 'completed';
+              return { ...t, status: newStatus };
+            }
+            return t;
+          });
+          return {
+            ...prev,
+            [period]: {
+              ...prev[period],
+              tasks: updatedPeriodTasks
+            }
+          };
+        });
+      };
+
+      // Filtered Tasks
+      const filteredTasks = useMemo(() => {
+        return currentData.tasks.filter(t => {
+          if (taskTab === 'active' && t.status === 'completed') return false;
+          if (taskTab === 'completed' && t.status !== 'completed') return false;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            return t.title.toLowerCase().includes(q) || t.project.toLowerCase().includes(q);
+          }
+          return true;
+        });
+      }, [currentData.tasks, taskTab, searchQuery]);
+
+      // Donut calculations
+      const totalProjects = currentData.projects.not_started + currentData.projects.in_progress + currentData.projects.completed;
+      const pctNotStarted = Math.round((currentData.projects.not_started / totalProjects) * 100);
+      const pctInProgress = Math.round((currentData.projects.in_progress / totalProjects) * 100);
+      const pctCompleted = Math.round((currentData.projects.completed / totalProjects) * 100);
+
+      // SVG Donut calculation
+      const radius = 40;
+      const circumference = 2 * Math.PI * radius; // ~251.3
+      const strokeNotStarted = (pctNotStarted / 100) * circumference;
+      const strokeInProgress = (pctInProgress / 100) * circumference;
+      const strokeCompleted = (pctCompleted / 100) * circumference;
+
+      // Invoices total
+      const totalInvoiceAmt = currentData.invoices.overdue.amount + currentData.invoices.due.amount + currentData.invoices.paid.amount;
+      const pctOverdue = Math.round((currentData.invoices.overdue.amount / totalInvoiceAmt) * 100);
+      const pctDue = Math.round((currentData.invoices.due.amount / totalInvoiceAmt) * 100);
+      const pctPaid = 100 - pctOverdue - pctDue;
+
+      return (
+        <div className="flex min-h-screen bg-slate-50 text-slate-900 antialiased">
+          
+          {/* ========================================================= */}
+          {/* 1. SIDEBAR (Logical grouping, icons + clear hover tooltips) */}
+          {/* ========================================================= */}
+          <aside className="w-16 md:w-20 bg-white border-r border-slate-200/80 flex flex-col items-center py-6 justify-between flex-shrink-0 z-30">
+            <div className="flex flex-col items-center space-y-6">
+              
+              {/* Brand Logo */}
+              <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-base shadow-sm" title="Panze Studio">
+                P
+              </div>
+
+              {/* Main CRM Navigation */}
+              <nav className="flex flex-col space-y-2">
+                {[
+                  { id: 'dashboard', icon: 'fa-solid fa-grid-2', label: 'Dashboard' },
+                  { id: 'projects', icon: 'fa-solid fa-folder-kanban', label: 'Projects' },
+                  { id: 'tasks', icon: 'fa-solid fa-circle-check', label: 'Tasks' },
+                  { id: 'clients', icon: 'fa-solid fa-users', label: 'Clients' },
+                  { id: 'invoices', icon: 'fa-solid fa-file-invoice-dollar', label: 'Invoices' },
+                  { id: 'reports', icon: 'fa-solid fa-chart-line', label: 'Reports' },
+                ].map(item => {
+                  const isActive = activeNav === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveNav(item.id)}
+                      title={item.label}
+                      className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition group ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <i className={`text-sm ${item.icon}`}></i>
+                      <span className="sr-only">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Bottom Utilities */}
+            <div className="flex flex-col items-center space-y-2">
+              <button title="Settings" className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition">
+                <i className="fa-solid fa-gear text-sm"></i>
+              </button>
+              <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold cursor-pointer border border-slate-300">
+                AB
+              </div>
+            </div>
+          </aside>
+
+          {/* ========================================================= */}
+          {/* MAIN VIEWPORT                                             */}
+          {/* ========================================================= */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+
+            {/* TOP HEADER */}
+            <header className="bg-white border-b border-slate-200/80 px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
+              <div>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+              </div>
+
+              {/* Global Time Controls & Search */}
+              <div className="flex items-center gap-3">
+                {/* Search */}
+                <div className="relative">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search..."
+                    className="w-40 sm:w-56 pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2 text-xs text-slate-400 hover:text-slate-600">
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                {/* Global Range Filter Pills */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 text-xs font-medium">
+                  {[
+                    { id: 'today', label: 'Today' },
+                    { id: 'week', label: 'Week' },
+                    { id: 'month', label: 'Month' }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => handlePeriodChange(tab.id)}
+                      className={`px-3 py-1 rounded-lg transition font-medium ${
+                        period === tab.id
+                          ? 'bg-slate-900 text-white shadow-xs font-semibold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Back to Careercommand */}
+                <a
+                  href="/"
+                  title="Return to Careercommand Operations"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                >
+                  <i className="fa-solid fa-arrow-left text-[11px]"></i>
+                  <span>Career Center</span>
+                </a>
+              </div>
+            </header>
+
+            {/* DASHBOARD CONTENT GRID (12-Columns) */}
+            <main className="p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+              
+              {/* Row 1: Tasks (5 cols) + Projects & Cash Flow (7 cols) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* CARD 1: TASKS (Job #1: What's due now) */}
+                <section className="lg:col-span-5 bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-bold text-slate-900">Tasks</h2>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600">
+                        {filteredTasks.length}
+                      </span>
+                    </div>
+
+                    {/* Filter Segment: All / Active / Completed */}
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px]">
+                      {['all', 'active', 'completed'].map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setTaskTab(f)}
+                          className={`px-2 py-0.5 rounded-md capitalize transition ${
+                            taskTab === f ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Task List */}
+                  <div className="space-y-2.5 max-h-[380px] overflow-y-auto custom-scroll pr-1">
+                    {filteredTasks.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-slate-400">
+                        No tasks match your filter.
+                      </div>
+                    ) : (
+                      filteredTasks.map(task => {
+                        const isDone = task.status === 'completed';
+                        return (
+                          <div
+                            key={task.id}
+                            className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 group ${
+                              isDone
+                                ? 'bg-slate-50/60 border-slate-200 text-slate-400'
+                                : 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <button
+                                onClick={() => toggleTask(task.id)}
+                                title={isDone ? 'Mark active' : 'Mark completed'}
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition flex-shrink-0 ${
+                                  isDone
+                                    ? 'bg-emerald-600 border-emerald-600 text-white'
+                                    : 'border-slate-300 text-transparent hover:border-slate-400'
+                                }`}
+                              >
+                                <i className="fa-solid fa-check text-[10px]"></i>
+                              </button>
+
+                              <div className="min-w-0">
+                                <p className={`text-xs font-semibold truncate ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                                  {task.title}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                  <span>{task.project}</span>
+                                  <span>•</span>
+                                  <span>Due {task.due}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              isDone ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'
+                            }`}>
+                              {isDone ? 'Completed' : 'Active'}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
+
+                {/* RIGHT COLUMN: Projects (4 cols) & Cash Flow (8 cols) inside a 12-col sub-grid */}
+                <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-12 gap-6">
+
+                  {/* CARD 2: PROJECTS OVERVIEW (Donut Chart) */}
+                  <section className="md:col-span-5 bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs space-y-4 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-bold text-slate-900">Projects</h2>
+                      <span className="text-xs text-slate-400 font-medium">{totalProjects} total</span>
+                    </div>
+
+                    {/* SVG Minimalist Donut Chart */}
+                    <div className="flex flex-col items-center justify-center py-2 relative">
+                      <svg width="150" height="150" viewBox="0 0 100 100" className="transform -rotate-90">
+                        {/* Background ring */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="#f1f5f9"
+                          strokeWidth="12"
+                        />
+                        {/* Not Started Segment (Slate) */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="#94a3b8"
+                          strokeWidth="12"
+                          strokeDasharray={`${strokeNotStarted} ${circumference}`}
+                          strokeDashoffset="0"
+                          className="transition-all duration-500"
+                        />
+                        {/* In Progress Segment (Amber/Orange) */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="#f97316"
+                          strokeWidth="12"
+                          strokeDasharray={`${strokeInProgress} ${circumference}`}
+                          strokeDashoffset={-strokeNotStarted}
+                          className="transition-all duration-500"
+                        />
+                        {/* Completed Segment (Blue) */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r={radius}
+                          fill="transparent"
+                          stroke="#0284c7"
+                          strokeWidth="12"
+                          strokeDasharray={`${strokeCompleted} ${circumference}`}
+                          strokeDashoffset={-(strokeNotStarted + strokeInProgress)}
+                          className="transition-all duration-500"
+                        />
+                      </svg>
+                      
+                      {/* Center Stats */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xl font-black text-slate-900">{totalProjects}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">Projects</span>
+                      </div>
+                    </div>
+
+                    {/* Clean Status Legend */}
+                    <div className="space-y-1.5 pt-1 text-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                          <span className="text-slate-600">In progress</span>
+                        </div>
+                        <span className="font-semibold text-slate-900">{currentData.projects.in_progress}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-sky-600"></span>
+                          <span className="text-slate-600">Completed</span>
+                        </div>
+                        <span className="font-semibold text-slate-900">{currentData.projects.completed}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                          <span className="text-slate-600">Not started</span>
+                        </div>
+                        <span className="font-semibold text-slate-900">{currentData.projects.not_started}</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* CARD 3: CASH FLOW (Income vs Expense) */}
+                  <section className="md:col-span-7 bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs space-y-4 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-bold text-slate-900">Cash flow</h2>
+                      <div className="flex items-center gap-3 text-[11px]">
+                        <span className="flex items-center gap-1 text-sky-700 font-semibold">
+                          <span className="w-2 h-2 rounded-full bg-sky-600"></span>
+                          ${currentData.finance.income.toLocaleString()}
+                        </span>
+                        <span className="flex items-center gap-1 text-orange-700 font-semibold">
+                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                          ${currentData.finance.expense.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Minimalist Bar Graph / Trend Display */}
+                    <div className="h-44 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-100">
+                      {currentData.finance.trend.map((pt, idx) => {
+                        const maxVal = Math.max(...currentData.finance.trend.map(p => Math.max(p.income, p.expense)));
+                        const incHeight = Math.round((pt.income / maxVal) * 110);
+                        const expHeight = Math.round((pt.expense / maxVal) * 110);
+                        return (
+                          <div key={idx} className="flex-1 flex flex-col items-center gap-1 group relative">
+                            {/* Hover tooltip */}
+                            <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition pointer-events-none bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap z-10">
+                              +${pt.income} / -${pt.expense}
+                            </div>
+
+                            <div className="w-full flex items-end justify-center gap-1">
+                              {/* Income Bar */}
+                              <div
+                                style={{ height: `${incHeight}px` }}
+                                className="w-2.5 sm:w-3 bg-sky-500 rounded-t-sm transition-all duration-300 group-hover:bg-sky-600"
+                              ></div>
+                              {/* Expense Bar */}
+                              <div
+                                style={{ height: `${expHeight}px` }}
+                                className="w-2.5 sm:w-3 bg-orange-400 rounded-t-sm transition-all duration-300 group-hover:bg-orange-500"
+                              ></div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-medium mt-1">{pt.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Net Balance Pill */}
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <span className="text-slate-500">Net margin</span>
+                      <span className="font-bold text-emerald-600">
+                        +${(currentData.finance.income - currentData.finance.expense).toLocaleString()}
+                      </span>
+                    </div>
+                  </section>
+
+                </div>
+              </div>
+
+              {/* Row 2: Invoices Overview (Full 12 cols) */}
+              <section className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">Invoices</h2>
+                    <p className="text-[11px] text-slate-400">Total outstanding receivables</p>
+                  </div>
+                  <div className="text-xs font-bold text-slate-900">
+                    ${totalInvoiceAmt.toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Progress bar breakdown */}
+                <div className="w-full h-3 rounded-full bg-slate-100 flex overflow-hidden">
+                  <div style={{ width: `${pctOverdue}%` }} className="bg-rose-500 transition-all duration-500" title={`Overdue: ${pctOverdue}%`}></div>
+                  <div style={{ width: `${pctDue}%` }} className="bg-amber-400 transition-all duration-500" title={`Due: ${pctDue}%`}></div>
+                  <div style={{ width: `${pctPaid}%` }} className="bg-emerald-500 transition-all duration-500" title={`Paid: ${pctPaid}%`}></div>
+                </div>
+
+                {/* Invoices Status Columns */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  
+                  {/* Overdue */}
+                  <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold text-rose-700">Overdue</span>
+                      <p className="text-base font-bold text-rose-900 mt-0.5">
+                        ${currentData.invoices.overdue.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-xs font-bold">
+                      {currentData.invoices.overdue.count}
+                    </span>
+                  </div>
+
+                  {/* Due */}
+                  <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold text-amber-700">Due</span>
+                      <p className="text-base font-bold text-amber-900 mt-0.5">
+                        ${currentData.invoices.due.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold">
+                      {currentData.invoices.due.count}
+                    </span>
+                  </div>
+
+                  {/* Paid */}
+                  <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-semibold text-emerald-700">Paid</span>
+                      <p className="text-base font-bold text-emerald-900 mt-0.5">
+                        ${currentData.invoices.paid.amount.toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                      {currentData.invoices.paid.count}
+                    </span>
+                  </div>
+
+                </div>
+              </section>
+
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -485,6 +485,13 @@ MERAKI_UI_HTML = """
           <span>Tracker</span>
         </button>
 
+        <!-- Clean SaaS UI View Link -->
+        <a href="/preview-dashboard" target="_blank" title="Open Enterprise Minimalist SaaS Dashboard Redesign"
+           class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+          <i class="fa-solid fa-shapes text-amber-300 text-xs"></i>
+          <span>SaaS UI</span>
+        </a>
+
         <!-- Live Sync / Manual Refresh Button -->
         <button onclick="manualRefreshData()" id="btnManualRefresh" title="Refresh Live Data, Queue & Statuses"
                 class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer">
@@ -4370,6 +4377,15 @@ MERAKI_UI_HTML = """
 @app.route("/")
 def index():
     return render_template_string(MERAKI_UI_HTML)
+
+
+@app.route("/preview-dashboard")
+def preview_dashboard():
+    template_path = os.path.join(BASE_DIR, "templates", "project_dashboard.html")
+    if os.path.exists(template_path):
+        with open(template_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Dashboard template not found", 404
 
 
 @app.route("/api/stats")

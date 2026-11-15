@@ -298,225 +298,229 @@ MERAKI_UI_HTML = """
       </div>
 
       <!-- Navigation Links -->
-      <nav class="space-y-6">
+      <nav class="space-y-5 overflow-y-auto custom-scroll pr-1">
+        <!-- Overview -->
         <div>
-          <span class="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Operations Hub</span>
-          <div class="mt-2 space-y-1">
+          <span class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overview</span>
+          <div class="mt-1 space-y-0.5">
             <button onclick="switchTab('dashboard')" id="nav-dashboard"
-                    class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm">
-              <i class="fa-solid fa-house w-4 text-indigo-600"></i>
+                    class="nav-item w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-semibold transition bg-slate-100 text-slate-900 shadow-xs">
+              <i class="fa-solid fa-house w-4 text-slate-600"></i>
               <span>Dashboard</span>
             </button>
             <button onclick="switchTab('reports')" id="nav-reports"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
               <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-clipboard-check w-4 text-emerald-600"></i>
-                <span>Tracker & Reports</span>
+                <i class="fa-solid fa-clipboard-check w-4 text-slate-500"></i>
+                <span>Tracker</span>
               </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700" id="sidebarReportsBadge">0</span>
-            </button>
-            <button onclick="switchTab('gmail')" id="nav-gmail"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-envelope-open-text w-4 text-purple-600"></i>
-                <span>Gmail Intel</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700" id="sidebarGmailBadge">0</span>
-            </button>
-            <button onclick="switchTab('feed')" id="nav-feed"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-rss w-4 text-teal-600"></i>
-                <span>Feed Hiring Posts</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700" id="sidebarFeedBadge">0</span>
-            </button>
-            <button onclick="switchTab('easy-apply')" id="nav-easy-apply"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-bolt-lightning w-4 text-blue-600"></i>
-                <span>Easy Apply & Jobs</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700" id="sidebarEasyApplyBadge">0</span>
-            </button>
-            <button onclick="switchTab('recruiters')" id="nav-recruiters"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-paper-plane w-4 text-sky-600"></i>
-                <span>Recruiter Emails</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700" id="sidebarRecruitersBadge">0</span>
-            </button>
-            <button onclick="switchTab('alumni')" id="nav-alumni"
-                    class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <i class="fa-solid fa-graduation-cap w-4 text-amber-500"></i>
-              <span>PEC Referrals</span>
-            </button>
-            <button onclick="switchTab('mumbai')" id="nav-mumbai"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-city w-4 text-indigo-600"></i>
-                <span>Mumbai Network</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" id="sidebarMumbaiBadge">0</span>
-            </button>
-            <button onclick="switchTab('naukri')" id="nav-naukri"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-bolt w-4 text-amber-500"></i>
-                <span>Naukri Autopilot</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700" id="sidebarNaukriBadge">0</span>
-            </button>
-            <button onclick="switchTab('manual')" id="nav-manual"
-                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-clipboard-list w-4 text-rose-500"></i>
-                <span>Manual Desk</span>
-              </div>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600" id="sidebarManualBadge">0</span>
-            </button>
-            <button onclick="switchTab('resume')" id="nav-resume"
-                    class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <i class="fa-solid fa-file-pdf w-4 text-rose-500"></i>
-              <span>Active Resume</span>
-            </button>
-            <button onclick="switchTab('terminal')" id="nav-terminal"
-                    class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
-              <i class="fa-solid fa-terminal w-4 text-slate-400"></i>
-              <span>Live Terminal</span>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarReportsBadge">0</span>
             </button>
           </div>
         </div>
 
+        <!-- Automation -->
         <div>
-          <span class="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Candidate Profile</span>
-          <div class="mt-2 space-y-1">
-            <div class="px-3 py-2 rounded-xl text-xs text-slate-500 flex items-center space-x-2 bg-slate-50">
-              <i class="fa-solid fa-user-circle text-indigo-600 text-base"></i>
-              <div>
-                <p class="font-bold text-slate-900 text-xs">Ashutosh Bajpai</p>
-                <p class="text-[10px] text-slate-400">PEC Chandigarh • 2026</p>
+          <span class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Automation</span>
+          <div class="mt-1 space-y-0.5">
+            <button onclick="switchTab('naukri')" id="nav-naukri"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-bolt w-4 text-slate-500"></i>
+                <span>Naukri</span>
               </div>
-            </div>
-            <div class="px-3 py-1 text-[11px] text-slate-400">
-              📞 8081377486
-            </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarNaukriBadge">0</span>
+            </button>
+            <button onclick="switchTab('feed')" id="nav-feed"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-rss w-4 text-slate-500"></i>
+                <span>Feed</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarFeedBadge">0</span>
+            </button>
+            <button onclick="switchTab('easy-apply')" id="nav-easy-apply"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-bolt-lightning w-4 text-slate-500"></i>
+                <span>Easy Apply</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarEasyApplyBadge">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Outreach -->
+        <div>
+          <span class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Outreach</span>
+          <div class="mt-1 space-y-0.5">
+            <button onclick="switchTab('alumni')" id="nav-alumni"
+                    class="nav-item w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <i class="fa-solid fa-graduation-cap w-4 text-slate-500"></i>
+              <span>Referrals</span>
+            </button>
+            <button onclick="switchTab('mumbai')" id="nav-mumbai"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-city w-4 text-slate-500"></i>
+                <span>Network</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarMumbaiBadge">0</span>
+            </button>
+            <button onclick="switchTab('recruiters')" id="nav-recruiters"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-paper-plane w-4 text-slate-500"></i>
+                <span>Recruiters</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarRecruitersBadge">0</span>
+            </button>
+            <button onclick="switchTab('gmail')" id="nav-gmail"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-envelope w-4 text-slate-500"></i>
+                <span>Gmail</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarGmailBadge">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tools -->
+        <div>
+          <span class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tools</span>
+          <div class="mt-1 space-y-0.5">
+            <button onclick="switchTab('manual')" id="nav-manual"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-clipboard-list w-4 text-slate-500"></i>
+                <span>Manual</span>
+              </div>
+              <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600" id="sidebarManualBadge">0</span>
+            </button>
+            <button onclick="switchTab('resume')" id="nav-resume"
+                    class="nav-item w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <i class="fa-solid fa-file-pdf w-4 text-slate-500"></i>
+              <span>Active Resume</span>
+            </button>
+            <button onclick="switchTab('terminal')" id="nav-terminal"
+                    class="nav-item w-full flex items-center space-x-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <i class="fa-solid fa-terminal w-4 text-slate-500"></i>
+              <span>Terminal</span>
+            </button>
           </div>
         </div>
       </nav>
 
     </div>
 
-    <!-- Active State Pill -->
-    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60 text-xs flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span class="text-slate-600 font-medium">Session Active</span>
+    <!-- Candidate Profile (Name and Avatar Only) -->
+    <div class="pt-4 border-t border-slate-100">
+      <div class="flex items-center space-x-2.5 px-2 py-1.5 rounded-xl hover:bg-slate-50 transition cursor-pointer" onclick="toggleProfilePopover()">
+        <div class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">
+          AB
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="font-semibold text-slate-900 text-xs truncate">Ashutosh Bajpai</p>
+          <p class="text-[10px] text-slate-400">Candidate</p>
+        </div>
       </div>
-      <span class="text-[10px] text-slate-400">All Platforms</span>
     </div>
   </aside>
 
   <!-- Main Content Wrapper -->
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-    <!-- Top Navbar with Direct Trigger Controls -->
-    <header class="bg-white border-b border-slate-200/80 px-6 py-3 flex flex-wrap items-center justify-between gap-3 z-10 flex-shrink-0">
+    <!-- Top Navbar -->
+    <header class="bg-white border-b border-slate-200/80 px-6 py-3 flex items-center justify-between gap-3 z-10 flex-shrink-0">
       <div class="min-w-0">
-        <nav class="text-xs text-slate-400 font-medium flex items-center space-x-1.5">
-          <span>Pages</span>
-          <span>/</span>
-          <span class="text-slate-800 capitalize" id="currentBreadcrumb">Dashboard</span>
-        </nav>
-        <h2 class="text-xl font-bold text-slate-900 leading-tight capitalize" id="currentPageHeading">Dashboard</h2>
+        <h1 class="text-xl font-bold text-slate-900 tracking-tight" id="currentPageHeading">Dashboard</h1>
+        <span id="currentBreadcrumb" class="hidden">Dashboard</span>
       </div>
 
-      <!-- Quick Manual Triggers Row -->
-      <div class="flex flex-wrap items-center gap-2">
-        <!-- MASTER 1-CLICK AUTOPILOT BUTTON -->
-        <button onclick="triggerMasterRunAll()" title="Single Button: Naukri Update & 50+ Apply, LinkedIn Easy Apply, Feed Harvester, and Mumbai Startups Connection Requests (No Note)"
-                class="bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/30 animate-pulse hover:animate-none cursor-pointer">
-          <i class="fa-solid fa-bolt-lightning text-amber-300"></i>
-          <span>RUN EVERYTHING</span>
+      <!-- Header Controls -->
+      <div class="flex items-center gap-2.5">
+        <!-- Primary Action -->
+        <button onclick="triggerMasterRunAll()" id="btnHeaderRunAll" title="Run Naukri update, feed harvester, easy apply, and startup outreach"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-2 px-3.5 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer">
+          <i class="fa-solid fa-play text-[10px]"></i>
+          <span>Run all</span>
         </button>
 
-        <!-- SINGLE BUTTON: NAUKRI UPDATE & APPLY ONLY -->
-        <button onclick="triggerAction('naukri_all')" title="Single Button: Update Naukri Recency & Apply to 50+ Aligned Jobs ONLY"
-                class="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-amber-500/25 cursor-pointer">
-          <i class="fa-solid fa-bolt text-amber-100"></i>
-          <span>Naukri Update & Apply</span>
-        </button>
-
-        <!-- SEPARATE DEDICATED MESSAGING BUTTON -->
-        <button onclick="triggerAction('send_messages')" title="Send Referral Messages & Notes to Approved Connections (SEPARATE from Connection Requests)"
-                class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-purple-600/30 cursor-pointer">
-          <i class="fa-solid fa-comments text-purple-200"></i>
-          <span>Send Messages</span>
-        </button>
-
-        <!-- STANDALONE COMPANY & STARTUP CONNECTIONS (NO NOTE) -->
-        <button onclick="triggerAction('company_connect')" title="Search Mumbai Companies & Startups: check Jobs section, send Connection Requests Only (No Note)"
-                class="bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-building text-sky-600"></i>
-          <span>Connect Startups</span>
-        </button>
-
-        <button onclick="triggerAction('linkedin_feed')" title="Harvest Feed for 100+ Hiring Posts, Forms & Recruiter Emails"
-                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-rss text-indigo-500"></i>
-          <span>Feed (100+)</span>
-        </button>
-        <button onclick="triggerAction('linkedin_apply')" title="Execute LinkedIn Easy Apply for Analyst/PM"
-                class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-          <i class="fa-brands fa-linkedin text-blue-600"></i>
-          <span>Easy Apply</span>
-        </button>
-        <button onclick="triggerAction('scan_gmail')" title="Scan Full Inbox for Application Updates"
-                class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
-          <span>Gmail</span>
-        </button>
-
-        <!-- Quick Tracker & Reports Button -->
-        <button onclick="switchTab('reports')" title="Open Applications Tracker & Hiring Reports"
-                class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-clipboard-check text-emerald-600"></i>
-          <span>Tracker</span>
-        </button>
-
-        <!-- Clean SaaS UI View Link -->
-        <a href="/preview-dashboard" target="_blank" title="Open Enterprise Minimalist SaaS Dashboard Redesign"
-           class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer">
-          <i class="fa-solid fa-shapes text-amber-300 text-xs"></i>
-          <span>SaaS UI</span>
-        </a>
-
-        <!-- Live Sync / Manual Refresh Button -->
-        <button onclick="manualRefreshData()" id="btnManualRefresh" title="Refresh Live Data, Queue & Statuses"
-                class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer">
-          <i class="fa-solid fa-arrows-rotate text-indigo-600 text-xs" id="refreshIcon"></i>
-          <span id="lastRefreshTime">Sync</span>
-        </button>
-
-        <!-- LinkedIn Session Auth Pill & Modal Trigger -->
-        <button onclick="openSessionModal()" id="btnSessionModal" title="Manage LinkedIn li_at Cookie & Cloud Authentication"
-                class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer">
-          <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
-          <span id="sessionStatusText">LinkedIn Auth</span>
-        </button>
-
-        <div id="taskStatusPill" class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span id="taskStatusText">System Idle</span>
+        <!-- Consolidated Actions Menu -->
+        <div class="relative inline-block text-left" id="headerActionsDropdownWrap">
+          <button onclick="toggleHeaderActionsMenu()" id="btnHeaderActions"
+                  class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+            <span>Actions</span>
+            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+          </button>
+          <div id="headerActionsMenu" class="hidden absolute right-0 mt-1.5 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50 text-xs">
+            <button onclick="triggerAction('naukri_all'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-bolt text-amber-500 w-4"></i> Naukri update & apply
+            </button>
+            <button onclick="triggerAction('send_messages'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-comments text-purple-600 w-4"></i> Send referral messages
+            </button>
+            <button onclick="triggerAction('company_connect'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-building text-sky-600 w-4"></i> Connect startups
+            </button>
+            <button onclick="triggerAction('linkedin_feed'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-rss text-teal-600 w-4"></i> Feed harvester
+            </button>
+            <button onclick="triggerAction('linkedin_apply'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-brands fa-linkedin text-blue-600 w-4"></i> Easy apply
+            </button>
+            <button onclick="triggerAction('scan_gmail'); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-envelope text-purple-600 w-4"></i> Scan Gmail
+            </button>
+            <div class="border-t border-slate-100 my-1"></div>
+            <button onclick="manualRefreshData(); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-slate-500 w-4"></i> Refresh data
+            </button>
+            <button onclick="resetTaskLock(); toggleHeaderActionsMenu();" class="w-full text-left px-3.5 py-2 hover:bg-rose-50 text-rose-600 flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-rotate-left w-4"></i> Reset task lock
+            </button>
+          </div>
         </div>
-        <button onclick="resetTaskLock()" title="Reset task lock if hung" class="text-[11px] text-slate-400 hover:text-rose-600 transition px-1.5 py-1 flex items-center gap-1 bg-slate-100 hover:bg-rose-50 rounded-lg">
-          <i class="fa-solid fa-rotate-left text-slate-500"></i>
-          <span>Reset</span>
+
+        <!-- Hidden Sync references to maintain JS compatibility -->
+        <span id="btnManualRefresh" class="hidden"><i id="refreshIcon"></i><span id="lastRefreshTime"></span></span>
+
+        <!-- System Status Indicator -->
+        <div id="taskStatusPill" class="px-2.5 py-1.5 text-xs font-medium rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="taskStatusText">Idle</span>
+        </div>
+
+        <!-- LinkedIn Session Status -->
+        <button onclick="openSessionModal()" id="btnSessionModal" title="Manage LinkedIn Authentication"
+                class="px-2.5 py-1.5 text-xs font-medium rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 flex items-center gap-1.5 transition cursor-pointer">
+          <i class="fa-brands fa-linkedin text-blue-600 text-xs"></i>
+          <span id="sessionStatusText">LinkedIn</span>
         </button>
-        
-        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white text-xs shadow-md shadow-indigo-500/20 ml-1">
-          AB
+
+        <!-- Candidate Profile Avatar & Popover -->
+        <div class="relative inline-block text-left" id="profilePopoverWrap">
+          <button onclick="toggleProfilePopover()" title="Candidate Profile: Ashutosh Bajpai"
+                  class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-indigo-600 transition flex items-center justify-center font-bold text-white text-xs cursor-pointer">
+            AB
+          </button>
+          <div id="profilePopover" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 z-50 text-xs space-y-3">
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                AB
+              </div>
+              <div>
+                <p class="font-bold text-slate-900 text-sm">Ashutosh Bajpai</p>
+                <p class="text-[11px] text-slate-500">PEC Chandigarh • Class of 2026</p>
+              </div>
+            </div>
+            <div class="border-t border-slate-100 pt-2 space-y-1.5 text-slate-600">
+              <p class="flex items-center gap-2"><i class="fa-solid fa-phone text-slate-400"></i> +91 8081377486</p>
+              <p class="flex items-center gap-2"><i class="fa-solid fa-location-dot text-slate-400"></i> Mumbai / Pan-India</p>
+              <p class="flex items-center gap-2"><i class="fa-solid fa-graduation-cap text-slate-400"></i> Product Management & Analytics</p>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -529,191 +533,178 @@ MERAKI_UI_HTML = """
       <!-- ========================================== -->
       <div id="view-dashboard" class="space-y-6">
 
-        <!-- Master Autopilot Single Launch Card -->
-        <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-indigo-500/20 shadow-xl flex items-center justify-between flex-wrap gap-4">
-          <div class="space-y-1.5 max-w-xl">
-            <div class="flex items-center gap-2">
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping"></span> Master One-Click Autopilot
+        <!-- Autopilot Hero Card -->
+        <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-2 max-w-xl">
+            <h2 class="text-lg font-bold text-slate-900 tracking-tight">Autopilot</h2>
+            <p class="text-xs text-slate-500 leading-relaxed">
+              Automate your daily applications, feed discovery, and outreach pipeline.
+            </p>
+            <div class="flex items-center gap-3 pt-1 text-xs text-slate-600">
+              <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold flex items-center justify-center">1</span>
+                <span>Naukri</span>
               </span>
-              <span class="text-xs text-emerald-300 font-medium">Modular & Clean Execution</span>
+              <span class="text-slate-300">•</span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold flex items-center justify-center">2</span>
+                <span>Feed</span>
+              </span>
+              <span class="text-slate-300">•</span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold flex items-center justify-center">3</span>
+                <span>Easy Apply</span>
+              </span>
+              <span class="text-slate-300">•</span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold flex items-center justify-center">4</span>
+                <span>Network</span>
+                <span title="Connection requests are sent without notes." class="text-slate-400 hover:text-slate-600 cursor-help">
+                  <i class="fa-solid fa-circle-info text-[11px]"></i>
+                </span>
+              </span>
             </div>
-            <h3 class="text-lg font-bold text-white">Autonomous Career Engine Launchpad</h3>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              <strong>Single Button Pipeline</strong>: 1. <strong>Naukri Recency Boost</strong> & <strong>50+ Mass Apply</strong> • 2. <strong>LinkedIn Feed Harvester</strong> (Google Forms & Emails) • 3. <strong>LinkedIn Easy Apply</strong> • 4. <strong>Mumbai & Startups Network Expander</strong> (Checks open jobs, sends <em>Connection Requests Only — No Note Attached</em>).
-            </p>
-            <p class="text-[11px] text-purple-300 flex items-center gap-1.5">
-              <i class="fa-solid fa-shield-halved"></i>
-              <span>Strict Rule Enforced: Connection requests are sent with <strong>NO notes</strong>. Messaging has its own separate button below.</span>
-            </p>
           </div>
-          <div class="flex flex-col sm:flex-row items-center gap-3">
+          <div class="flex items-center gap-2.5">
             <button onclick="triggerMasterRunAll()" id="btnMasterHeroRun"
-                    class="bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-sm py-3.5 px-6 rounded-2xl shadow-xl shadow-emerald-500/30 flex items-center gap-2.5 transition transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
-              <i class="fa-solid fa-play text-slate-950 text-base"></i>
-              <span id="masterHeroRunLabel">START ALL OPERATIONS</span>
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-2.5 px-4 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-2">
+              <i class="fa-solid fa-play text-[11px]"></i>
+              <span id="masterHeroRunLabel">Start all</span>
             </button>
             <button onclick="triggerAction('send_messages')"
-                    class="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-3.5 px-4 rounded-2xl shadow-lg shadow-purple-600/30 flex items-center gap-2 transition cursor-pointer">
-              <i class="fa-solid fa-comments"></i>
-              <span>Send Referral Messages (Separate)</span>
+                    class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs py-2.5 px-3.5 rounded-xl shadow-xs transition cursor-pointer">
+              <span>Send referrals</span>
             </button>
           </div>
         </div>
 
         <!-- 4 Metric Cards Row -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          <!-- Card 1: Today's Applications -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition">
-            <div>
-              <p class="text-xs font-semibold text-slate-400">Total Applied Today</p>
-              <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardTodayCount">10</h3>
-                <span class="text-xs font-semibold text-emerald-500">+50 Target</span>
+          <!-- Card 1: Applied today -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-32 hover:border-slate-300 transition">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium text-slate-500">Applied today</p>
+              <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xs">
+                <i class="fa-solid fa-paper-plane"></i>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-              <i class="fa-solid fa-paper-plane text-lg"></i>
+            <div>
+              <div class="flex items-baseline space-x-1">
+                <h3 class="text-xl font-bold text-slate-900" id="cardTodayCount">0 / 50</h3>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-1 mt-2 overflow-hidden">
+                <div class="bg-indigo-600 h-1 rounded-full transition-all duration-300" id="cardTodayProgress" style="width: 0%"></div>
+              </div>
             </div>
           </div>
 
-          <!-- Card 2: Feed Hiring Posts -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('feed')">
-            <div>
-              <p class="text-xs font-semibold text-slate-400">Feed Hiring Posts</p>
-              <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardFeedCount">0</h3>
-                <span class="text-xs font-semibold text-teal-600">Google & Forms</span>
+          <!-- Card 2: Feed -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-32 hover:border-slate-300 transition cursor-pointer" onclick="switchTab('feed')">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium text-slate-500">Feed</p>
+              <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xs">
+                <i class="fa-solid fa-rss"></i>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-md shadow-teal-600/30">
-              <i class="fa-solid fa-rss text-lg"></i>
+            <div>
+              <h3 class="text-xl font-bold text-slate-900" id="cardFeedCount">0</h3>
             </div>
           </div>
 
-          <!-- Card 3: Easy Apply & Target Jobs -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('easy-apply')">
-            <div>
-              <p class="text-xs font-semibold text-slate-400">Easy Apply & Jobs</p>
-              <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardEasyApplyCount">0</h3>
-                <span class="text-xs font-semibold text-blue-600">0-2 Yrs Roles</span>
+          <!-- Card 3: Easy Apply -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-32 hover:border-slate-300 transition cursor-pointer" onclick="switchTab('easy-apply')">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium text-slate-500">Easy Apply</p>
+              <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xs">
+                <i class="fa-solid fa-bolt-lightning"></i>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/30">
-              <i class="fa-solid fa-bolt-lightning text-lg"></i>
+            <div>
+              <h3 class="text-xl font-bold text-slate-900" id="cardEasyApplyCount">0</h3>
             </div>
           </div>
 
-          <!-- Card 4: Recruiter Outreach & Leads -->
-          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between hover:shadow-md transition cursor-pointer" onclick="switchTab('recruiters')">
-            <div>
-              <p class="text-xs font-semibold text-slate-400">Recruiter Emails</p>
-              <div class="flex items-baseline space-x-2 mt-1">
-                <h3 class="text-2xl font-bold text-slate-900" id="cardRecruiterCount">0</h3>
-                <span class="text-xs font-semibold text-sky-500">Drafts Ready</span>
+          <!-- Card 4: Recruiters -->
+          <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between h-32 hover:border-slate-300 transition cursor-pointer" onclick="switchTab('recruiters')">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-medium text-slate-500">Recruiters</p>
+              <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center text-xs">
+                <i class="fa-solid fa-envelope"></i>
               </div>
             </div>
-            <div class="w-12 h-12 rounded-xl bg-sky-500 flex items-center justify-center text-white shadow-md shadow-sky-500/30">
-              <i class="fa-solid fa-envelope-open-text text-lg"></i>
+            <div>
+              <h3 class="text-xl font-bold text-slate-900" id="cardRecruiterCount">0</h3>
             </div>
           </div>
 
         </div>
 
-        <!-- Meraki Dark Navy Hero Chart Card -->
-        <div class="bg-[#1e1b4b] rounded-3xl p-7 text-white shadow-xl relative overflow-hidden">
-          <div class="flex items-center justify-between mb-4">
+        <!-- Weekly Activity Chart Card -->
+        <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
             <div>
-              <h3 class="text-lg font-bold">Active Applications & Pipeline Momentum</h3>
-              <p class="text-xs text-indigo-200 mt-0.5"><span class="text-emerald-400 font-semibold">+10 applies</span> completed today across platforms</p>
+              <h3 class="text-sm font-bold text-slate-900">Weekly activity</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Applications and outreach across the last 7 days</p>
             </div>
-            <div class="flex items-center space-x-3 text-xs">
-              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Direct Applies</span>
-              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span> PEC Outreach</span>
-              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Recruiter Alerts</span>
+            <div class="flex items-center space-x-3 text-xs text-slate-500">
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-300"></span> Previous</span>
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-600"></span> Today</span>
             </div>
           </div>
 
-          <!-- Stylized Bar Graph matching reference image -->
-          <div class="h-44 w-full flex items-end justify-between px-4 pb-2 border-b border-indigo-900/60">
+          <!-- Stylized Bar Graph -->
+          <div class="h-36 w-full flex items-end justify-between px-6 pb-2 border-b border-slate-100">
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 110px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Mon</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 70px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Mon</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 85px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Tue</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 55px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Tue</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 125px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Wed</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 80px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Wed</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 155px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Thu</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 95px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Thu</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 100px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Fri</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 65px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Fri</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-white rounded-full transition-all duration-500" style="height: 75px;"></div>
-              <span class="text-[10px] text-indigo-300 font-medium">Sat</span>
+              <div class="w-3 bg-slate-200 rounded-md transition-all duration-500" style="height: 45px;"></div>
+              <span class="text-[10px] text-slate-400 font-medium">Sat</span>
             </div>
             <div class="flex flex-col items-center gap-2">
-              <div class="w-2.5 bg-emerald-400 rounded-full transition-all duration-500 shadow-lg shadow-emerald-400/50" style="height: 140px;"></div>
-              <span class="text-[10px] text-emerald-400 font-bold">Today</span>
+              <div class="w-3 bg-indigo-600 rounded-md transition-all duration-500" style="height: 90px;"></div>
+              <span class="text-[10px] text-indigo-600 font-bold">Today</span>
             </div>
           </div>
 
-          <!-- Bottom 4 Stats Bar from reference image -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-5 mt-2">
+          <!-- Bottom 4 Stats Row -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
             <div>
-              <div class="flex items-center space-x-2 text-indigo-200 text-xs">
-                <i class="fa-solid fa-bolt text-amber-400"></i>
-                <span>Naukri Applies</span>
-              </div>
-              <h4 class="text-xl font-bold mt-1" id="metricNaukri">10</h4>
-              <div class="w-full bg-indigo-950 rounded-full h-1 mt-2">
-                <div class="bg-amber-400 h-1 rounded-full" style="width: 100%"></div>
-              </div>
+              <span class="text-xs text-slate-500">Naukri</span>
+              <h4 class="text-base font-bold text-slate-900 mt-0.5" id="metricNaukri">0</h4>
             </div>
-
             <div>
-              <div class="flex items-center space-x-2 text-indigo-200 text-xs">
-                <i class="fa-solid fa-envelope text-purple-400"></i>
-                <span>Gmail Intel</span>
-              </div>
-              <h4 class="text-xl font-bold mt-1" id="metricGmail">51</h4>
-              <div class="w-full bg-indigo-950 rounded-full h-1 mt-2">
-                <div class="bg-purple-400 h-1 rounded-full" style="width: 85%"></div>
-              </div>
+              <span class="text-xs text-slate-500">Gmail</span>
+              <h4 class="text-base font-bold text-slate-900 mt-0.5" id="metricGmail">0</h4>
             </div>
-
             <div>
-              <div class="flex items-center space-x-2 text-indigo-200 text-xs">
-                <i class="fa-solid fa-graduation-cap text-sky-400"></i>
-                <span>PEC Alumni Outreach</span>
-              </div>
-              <h4 class="text-xl font-bold mt-1">2 Sent</h4>
-              <div class="w-full bg-indigo-950 rounded-full h-1 mt-2">
-                <div class="bg-sky-400 h-1 rounded-full" style="width: 100%"></div>
-              </div>
+              <span class="text-xs text-slate-500">Referrals</span>
+              <h4 class="text-base font-bold text-slate-900 mt-0.5">2 sent</h4>
             </div>
-
             <div>
-              <div class="flex items-center space-x-2 text-indigo-200 text-xs">
-                <i class="fa-solid fa-shield-halved text-rose-400"></i>
-                <span>Manual Desk</span>
-              </div>
-              <h4 class="text-xl font-bold mt-1" id="metricManual">12</h4>
-              <div class="w-full bg-indigo-950 rounded-full h-1 mt-2">
-                <div class="bg-rose-400 h-1 rounded-full" style="width: 45%"></div>
-              </div>
+              <span class="text-xs text-slate-500">Manual</span>
+              <h4 class="text-base font-bold text-slate-900 mt-0.5" id="metricManual">0</h4>
             </div>
           </div>
+        </div>
 
         </div>
 
@@ -1905,11 +1896,11 @@ MERAKI_UI_HTML = """
       if (tabId === 'forms') tabId = 'feed';
       activeTab = tabId;
       document.querySelectorAll('.nav-item').forEach(el => {
-        el.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition";
+        el.className = "nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition";
       });
       const activeNav = document.getElementById(`nav-${tabId}`);
       if (activeNav) {
-        activeNav.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm";
+        activeNav.className = "nav-item w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition bg-slate-100 text-slate-900 shadow-xs";
       }
 
       ['dashboard', 'reports', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'mumbai', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
@@ -1918,25 +1909,49 @@ MERAKI_UI_HTML = """
       });
 
       const headingMap = {
-        dashboard: 'Executive Dashboard',
-        reports: 'Application Tracker & Status Reports Desk',
-        gmail: 'Gmail Inbox Intelligence',
-        feed: 'LinkedIn Feed Posts & Forms Desk',
-        'easy-apply': 'Easy Apply & Target Job Listings Desk',
-        forms: 'LinkedIn Feed Posts & Forms Desk',
-        recruiters: 'Harvested Recruiter Emails',
-        alumni: 'PEC Alumni & Referral Outreach',
-        mumbai: 'Mumbai Network Builder & 2-Day Follow-Up',
-        naukri: 'Naukri Daily Recency Booster',
-        manual: 'Manual Intervention Desk',
-        resume: 'Active Master Resume & Two-Phase Referral Desk',
-        terminal: 'Live Background Console'
+        dashboard: 'Dashboard',
+        reports: 'Tracker',
+        gmail: 'Gmail',
+        feed: 'Feed',
+        'easy-apply': 'Easy Apply',
+        forms: 'Feed',
+        recruiters: 'Recruiters',
+        alumni: 'Referrals',
+        mumbai: 'Network',
+        naukri: 'Naukri',
+        manual: 'Manual',
+        resume: 'Active Resume',
+        terminal: 'Terminal'
       };
 
-      document.getElementById('currentBreadcrumb').innerText = tabId;
+      const breadcrumbEl = document.getElementById('currentBreadcrumb');
+      if (breadcrumbEl) breadcrumbEl.innerText = tabId;
       document.getElementById('currentPageHeading').innerText = headingMap[tabId] || tabId;
       refreshTabView(tabId);
     }
+
+    function toggleHeaderActionsMenu() {
+      const menu = document.getElementById('headerActionsMenu');
+      if (menu) menu.classList.toggle('hidden');
+    }
+
+    function toggleProfilePopover() {
+      const popover = document.getElementById('profilePopover');
+      if (popover) popover.classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+      const actionsWrap = document.getElementById('headerActionsDropdownWrap');
+      const actionsMenu = document.getElementById('headerActionsMenu');
+      if (actionsWrap && actionsMenu && !actionsWrap.contains(e.target)) {
+        actionsMenu.classList.add('hidden');
+      }
+      const popoverWrap = document.getElementById('profilePopoverWrap');
+      const popover = document.getElementById('profilePopover');
+      if (popoverWrap && popover && !popoverWrap.contains(e.target)) {
+        popover.classList.add('hidden');
+      }
+    });
 
     function refreshTabView(tabId) {
       if (tabId === 'dashboard') { loadManualTable(); loadGmailIntel(); loadScreeningPassed(); loadApplicationsTable(true); }
@@ -1957,7 +1972,12 @@ MERAKI_UI_HTML = """
       try {
         const res = await fetch('/api/stats');
         const d = await res.json();
-        document.getElementById('cardTodayCount').innerText = d.total_today;
+        const todayCount = d.total_today || 0;
+        document.getElementById('cardTodayCount').innerText = `${todayCount} / 50`;
+        const progEl = document.getElementById('cardTodayProgress');
+        if (progEl) {
+          progEl.style.width = Math.min(100, Math.round((todayCount / 50) * 100)) + '%';
+        }
         if (document.getElementById('cardFeedCount')) document.getElementById('cardFeedCount').innerText = d.feed_posts_count ?? d.pending_forms_count ?? 0;
         if (document.getElementById('cardEasyApplyCount')) document.getElementById('cardEasyApplyCount').innerText = d.easy_apply_count ?? 0;
         if (document.getElementById('cardRecruiterCount')) document.getElementById('cardRecruiterCount').innerText = d.recruiter_leads_count ?? 0;
@@ -2009,11 +2029,11 @@ MERAKI_UI_HTML = """
         const pillTxt = document.getElementById('taskStatusText');
         if (pill && ct) {
           if (ct.running) {
-            pill.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 shadow-sm";
-            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span><span>Running: ${ct.name} (${ct.started_at || ''})</span>`;
+            pill.className = "px-2.5 py-1.5 text-xs font-medium rounded-xl bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5";
+            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span><span>Running: ${ct.name}</span>`;
           } else {
-            pill.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm";
-            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>System Idle</span>`;
+            pill.className = "px-2.5 py-1.5 text-xs font-medium rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5";
+            pill.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>Idle</span>`;
           }
         }
 
@@ -2021,11 +2041,11 @@ MERAKI_UI_HTML = """
         const badgeBtn = document.getElementById('btnSessionModal');
         if (badge && badgeBtn) {
           if (d.linkedin_authenticated) {
-            badgeBtn.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shadow-sm transition cursor-pointer";
-            badge.innerText = "LinkedIn: Active";
+            badgeBtn.className = "px-2.5 py-1.5 text-xs font-medium rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 flex items-center gap-1.5 transition cursor-pointer";
+            badge.innerText = "LinkedIn";
           } else {
-            badgeBtn.className = "px-2.5 py-1 text-xs font-semibold rounded-xl bg-amber-50 text-amber-700 border border-amber-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer animate-pulse";
-            badge.innerText = "LinkedIn: Update Key";
+            badgeBtn.className = "px-2.5 py-1.5 text-xs font-medium rounded-xl bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1.5 transition cursor-pointer";
+            badge.innerText = "Update key";
           }
         }
       } catch (e) {}
@@ -4377,15 +4397,6 @@ MERAKI_UI_HTML = """
 @app.route("/")
 def index():
     return render_template_string(MERAKI_UI_HTML)
-
-
-@app.route("/preview-dashboard")
-def preview_dashboard():
-    template_path = os.path.join(BASE_DIR, "templates", "project_dashboard.html")
-    if os.path.exists(template_path):
-        with open(template_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Dashboard template not found", 404
 
 
 @app.route("/api/stats")

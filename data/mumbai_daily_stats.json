@@ -1,0 +1,30 @@
+{
+  "2026-11-11": {
+    "date": "2026-11-11",
+    "connections_sent": 8,
+    "messages_sent": 0,
+    "acceptances_detected": 0,
+    "completed_followups": 0
+  },
+  "2026-11-12": {
+    "date": "2026-11-12",
+    "connections_sent": 6,
+    "messages_sent": 0,
+    "acceptances_detected": 4,
+    "completed_followups": 0
+  },
+  "2026-11-14": {
+    "date": "2026-11-14",
+    "connections_sent": 6,
+    "messages_sent": 0,
+    "acceptances_detected": 1,
+    "completed_followups": 0
+  },
+  "2026-11-15": {
+    "date": "2026-11-15",
+    "connections_sent": 0,
+    "messages_sent": 0,
+    "acceptances_detected": 3,
+    "completed_followups": 0
+  }
+}

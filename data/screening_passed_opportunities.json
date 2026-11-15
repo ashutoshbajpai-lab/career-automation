@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "company": "ISRO (ICRB)",
+    "sender": "ISRO",
+    "subject": "ISRO ICRB Admit Card for CBT Online Exam",
+    "snippet": "Download admit card",
+    "category": "Exam / Assessment / Next Steps",
+    "status_badge": "bg-purple-100 text-purple-700 font-bold",
+    "next_action": "CBT Exam Date & City Intimated / Admit Card Available",
+    "is_screening_passed": true,
+    "passed_stage": "CBT Exam Date & City Intimated",
+    "date": "Nov 11",
+    "gmail_link": "https://mail.google.com/mail/u/0/#inbox"
+  }
+]

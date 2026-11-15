@@ -22,7 +22,7 @@ import schedule
 import logging
 import threading
 from datetime import datetime, timezone, timedelta
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, send_file
 from werkzeug.utils import secure_filename
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -31,6 +31,7 @@ from browser_session import BrowserManager, is_cloud_low_mem, get_tree_ram_mb, w
 from referral_engine import ReferralEngine
 from naukri_automator import NaukriAutomator
 from email_tracker import EmailTracker, EMAIL_INTEL_JSON
+from application_tracker import tracker as app_tracker, VALID_STATUSES as APP_VALID_STATUSES
 from recruitment_dispatcher import (
     sync_leads, PENDING_FORMS_JSON, FEED_POSTS_JSON, EASY_APPLY_JOBS_JSON, RECRUITER_LEADS_JSON, 
     dismiss_pending_form, clear_all_pending_forms, dismiss_recruiter_lead,
@@ -222,6 +223,12 @@ def get_stats():
     except Exception:
         pass
 
+    app_stats = {}
+    try:
+        app_stats = app_tracker.get_stats()
+    except Exception as e:
+        logger.error(f"Error fetching app stats: {e}")
+
     return {
         "naukri_today": naukri_count,
         "linkedin_today": linkedin_count,
@@ -235,6 +242,8 @@ def get_stats():
         "outreach_count": len(outreach_records),
         "mumbai_companies_count": mumbai_companies_count,
         "mumbai_incomplete_count": mumbai_incomplete_count,
+        "applications_stats": app_stats,
+        "applications_total": app_stats.get("total", 0),
         "naukri_boost": boost_status,
         "current_task": CURRENT_TASK,
         "scheduler_status": "Active (8h Shift 09:00 - 17:00 IST)" if is_active_shift else "Standby (Resumes 09:00 AM IST)",
@@ -297,6 +306,14 @@ MERAKI_UI_HTML = """
                     class="nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm">
               <i class="fa-solid fa-house w-4 text-indigo-600"></i>
               <span>Dashboard</span>
+            </button>
+            <button onclick="switchTab('reports')" id="nav-reports"
+                    class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
+              <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-clipboard-check w-4 text-emerald-600"></i>
+                <span>Tracker & Reports</span>
+              </div>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700" id="sidebarReportsBadge">0</span>
             </button>
             <button onclick="switchTab('gmail')" id="nav-gmail"
                     class="nav-item w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition">
@@ -459,6 +476,20 @@ MERAKI_UI_HTML = """
                 class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
           <i class="fa-solid fa-envelope-circle-check text-purple-600"></i>
           <span>Gmail</span>
+        </button>
+
+        <!-- Quick Tracker & Reports Button -->
+        <button onclick="switchTab('reports')" title="Open Applications Tracker & Hiring Reports"
+                class="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+          <i class="fa-solid fa-clipboard-check text-emerald-600"></i>
+          <span>Tracker</span>
+        </button>
+
+        <!-- Live Sync / Manual Refresh Button -->
+        <button onclick="manualRefreshData()" id="btnManualRefresh" title="Refresh Live Data, Queue & Statuses"
+                class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+          <i class="fa-solid fa-arrows-rotate text-indigo-600 text-xs" id="refreshIcon"></i>
+          <span id="lastRefreshTime">Sync</span>
         </button>
 
         <!-- LinkedIn Session Auth Pill & Modal Trigger -->
@@ -679,6 +710,82 @@ MERAKI_UI_HTML = """
 
         </div>
 
+        <!-- Unified Application Status & Reports Funnel Card -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-clipboard-check text-emerald-600"></i>
+                <span>Application Tracker & Multi-Channel Hiring Pipeline</span>
+              </h3>
+              <p class="text-xs text-slate-500">Live recruitment tracking across Naukri Autopilot, LinkedIn Easy Apply, Direct Portals, Recruiter Emails, and Calls.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="openAddApplicationModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer">
+                <i class="fa-solid fa-phone-volume"></i>
+                <span>+ Log Recruiter Call</span>
+              </button>
+              <button onclick="syncApplicationSources()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 border border-slate-300 cursor-pointer">
+                <i class="fa-solid fa-arrows-rotate text-indigo-600" id="syncTrackerIconDash"></i>
+                <span>Sync Email Intel</span>
+              </button>
+              <button onclick="downloadApplicationsReport()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 border border-indigo-200 cursor-pointer">
+                <i class="fa-solid fa-file-arrow-down text-indigo-600"></i>
+                <span>Export CSV Report</span>
+              </button>
+              <button onclick="switchTab('reports')" class="text-xs text-indigo-600 font-bold hover:underline px-2 py-1 cursor-pointer">
+                View Full Reports Tab &rarr;
+              </button>
+            </div>
+          </div>
+
+          <!-- Status Funnel Pills -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+            <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3 cursor-pointer hover:bg-slate-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('All');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500">Total Tracked</p>
+                <i class="fa-solid fa-layer-group text-slate-400 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-slate-900 mt-1" id="dashTrackerTotal">0</h4>
+            </div>
+            <div class="bg-blue-50/70 border border-blue-200/70 rounded-xl p-3 cursor-pointer hover:bg-blue-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Applied');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-blue-700">Applied</p>
+                <i class="fa-solid fa-paper-plane text-blue-500 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-blue-900 mt-1" id="dashTrackerApplied">0</h4>
+            </div>
+            <div class="bg-purple-50/70 border border-purple-200/70 rounded-xl p-3 cursor-pointer hover:bg-purple-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Screening / Assessment');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-purple-700">Tests / Screening</p>
+                <i class="fa-solid fa-vial-circle-check text-purple-500 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-purple-900 mt-1" id="dashTrackerScreening">0</h4>
+            </div>
+            <div class="bg-amber-50/70 border border-amber-200/70 rounded-xl p-3 cursor-pointer hover:bg-amber-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('HR Screening Call');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-amber-700">HR / Recruiter Calls</p>
+                <i class="fa-solid fa-headset text-amber-500 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-amber-900 mt-1" id="dashTrackerHR">0</h4>
+            </div>
+            <div class="bg-teal-50/70 border border-teal-200/70 rounded-xl p-3 cursor-pointer hover:bg-teal-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Interview Scheduled');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-teal-700">Interviews</p>
+                <i class="fa-solid fa-calendar-check text-teal-500 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-teal-900 mt-1" id="dashTrackerInterview">0</h4>
+            </div>
+            <div class="bg-emerald-50/70 border border-emerald-200/70 rounded-xl p-3 cursor-pointer hover:bg-emerald-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Offer');">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-emerald-700">Offers</p>
+                <i class="fa-solid fa-award text-emerald-500 text-xs"></i>
+              </div>
+              <h4 class="text-xl font-bold text-emerald-900 mt-1" id="dashTrackerOffer">0</h4>
+            </div>
+          </div>
+        </div>
+
         <!-- Two Columns: Recent In-Progress Emails & Quick Manual Desk -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
@@ -738,6 +845,174 @@ MERAKI_UI_HTML = """
             </div>
           </div>
 
+        </div>
+
+      </div>
+
+      <!-- ========================================== -->
+      <!-- TAB: APPLICATIONS TRACKER & STATUS REPORTS -->
+      <!-- ========================================== -->
+      <div id="view-reports" class="hidden space-y-6">
+
+        <!-- Header Card -->
+        <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-6 rounded-3xl text-white shadow-xl border border-indigo-500/20 flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-1.5 max-w-2xl">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-line text-slate-950"></i> Unified Recruitment Desk
+              </span>
+              <span class="text-xs text-indigo-300 font-medium">Naukri • LinkedIn • Direct • Email • Manual Calls</span>
+            </div>
+            <h3 class="text-xl font-bold text-white">Application Tracker & Lifecycle Status Reports</h3>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Real-time central command for all job applications across channels. Filter by stage, update recruiter phone/screening notes, automatically capture incoming email invitations & assessment links, and export complete compliance reports.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <button onclick="openAddApplicationModal()"
+                    class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer">
+              <i class="fa-solid fa-phone-volume text-sm"></i>
+              <span>+ Log Recruiter Call / Entry</span>
+            </button>
+            <button onclick="syncApplicationSources()"
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-sm" id="syncTrackerBtnIcon"></i>
+              <span>Sync Email Intel</span>
+            </button>
+            <button onclick="downloadApplicationsReport()"
+                    class="bg-white/10 hover:bg-white/20 text-white font-semibold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 border border-white/20 cursor-pointer">
+              <i class="fa-solid fa-file-arrow-down text-sm"></i>
+              <span>Download CSV Report</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI Status Cards Row (Clickable Filters) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('All')">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">All Applications</p>
+            <h4 class="text-2xl font-black text-slate-900 mt-1" id="repCountAll">0</h4>
+            <span class="text-[10px] text-indigo-600 font-semibold">Total across all</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Applied')">
+            <p class="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Applied</p>
+            <h4 class="text-2xl font-black text-blue-700 mt-1" id="repCountApplied">0</h4>
+            <span class="text-[10px] text-slate-400 font-medium">Submitted</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Screening / Assessment')">
+            <p class="text-[11px] font-semibold text-purple-600 uppercase tracking-wider">Screening / Tests</p>
+            <h4 class="text-2xl font-black text-purple-700 mt-1" id="repCountScreening">0</h4>
+            <span class="text-[10px] text-purple-600 font-semibold">Assessments / CBT</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('HR Screening Call')">
+            <p class="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Recruiter Calls</p>
+            <h4 class="text-2xl font-black text-amber-700 mt-1" id="repCountHR">0</h4>
+            <span class="text-[10px] text-amber-600 font-semibold">HR / Phone Screen</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-teal-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Interview Scheduled')">
+            <p class="text-[11px] font-semibold text-teal-600 uppercase tracking-wider">Interviews</p>
+            <h4 class="text-2xl font-black text-teal-700 mt-1" id="repCountInterview">0</h4>
+            <span class="text-[10px] text-teal-600 font-semibold">Technical / Final</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Offer')">
+            <p class="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Offers</p>
+            <h4 class="text-2xl font-black text-emerald-700 mt-1" id="repCountOffer">0</h4>
+            <span class="text-[10px] text-emerald-600 font-semibold">Selected / Offers</span>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Rejected')">
+            <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Archived / Rejected</p>
+            <h4 class="text-2xl font-black text-slate-600 mt-1" id="repCountRejected">0</h4>
+            <span class="text-[10px] text-slate-400 font-medium">Inactive</span>
+          </div>
+        </div>
+
+        <!-- Filter & Search Control Panel -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <!-- Search Input -->
+            <div class="flex-1 min-w-[260px] relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
+              <input type="text" id="trackerSearchInput" oninput="handleTrackerSearch()"
+                     placeholder="Search by company, role title, recruiter name, or notes..."
+                     class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-wrap items-center gap-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold text-slate-500">Status:</span>
+                <select id="trackerStatusSelect" onchange="handleTrackerFilterChange()"
+                        class="text-xs font-semibold border border-slate-300 rounded-xl px-2.5 py-1.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="All">All Statuses</option>
+                  <option value="Applied">Applied</option>
+                  <option value="Screening / Assessment">Screening / Assessment</option>
+                  <option value="HR Screening Call">HR Screening Call</option>
+                  <option value="Interview Scheduled">Interview Scheduled</option>
+                  <option value="Offer">Offer</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold text-slate-500">Source:</span>
+                <select id="trackerSourceSelect" onchange="handleTrackerFilterChange()"
+                        class="text-xs font-semibold border border-slate-300 rounded-xl px-2.5 py-1.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="All">All Sources</option>
+                  <option value="Naukri">Naukri Autopilot</option>
+                  <option value="LinkedIn Easy Apply">LinkedIn Easy Apply</option>
+                  <option value="Direct Portal">Direct Portal</option>
+                  <option value="Recruiter Email / Direct">Recruiter Email Outreach</option>
+                  <option value="Manual / Recruiter Call">Recruiter Call / Phone</option>
+                </select>
+              </div>
+
+              <button onclick="resetTrackerFilters()"
+                      class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer">
+                Reset
+              </button>
+
+              <span class="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl ml-1" id="trackerShowingCount">
+                Loading...
+              </span>
+            </div>
+          </div>
+
+          <!-- Applications Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                <tr>
+                  <th class="p-3">Applied / Date</th>
+                  <th class="p-3">Company & Role</th>
+                  <th class="p-3">Source Channel</th>
+                  <th class="p-3">Application Status (Interactive)</th>
+                  <th class="p-3">Recruiter / Contact</th>
+                  <th class="p-3">Notes & Next Action</th>
+                  <th class="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100" id="trackerTableBody">
+                <tr><td colspan="7" class="p-8 text-center text-slate-400">Loading application records...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div class="flex items-center justify-between pt-2 text-xs text-slate-500">
+            <div id="trackerPaginationInfo">Showing page 1</div>
+            <div class="flex items-center gap-2">
+              <button onclick="trackerPrevPage()" id="btnTrackerPrev"
+                      class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
+                &larr; Previous
+              </button>
+              <span id="trackerCurrentPageNum" class="px-2 font-bold text-slate-800">1</span>
+              <button onclick="trackerNextPage()" id="btnTrackerNext"
+                      class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">
+                Next &rarr;
+              </button>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -1630,13 +1905,14 @@ MERAKI_UI_HTML = """
         activeNav.className = "nav-item w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition bg-slate-100 text-slate-900 shadow-sm";
       }
 
-      ['dashboard', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'mumbai', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
+      ['dashboard', 'reports', 'gmail', 'feed', 'easy-apply', 'forms', 'recruiters', 'alumni', 'mumbai', 'naukri', 'manual', 'resume', 'terminal'].forEach(t => {
         const el = document.getElementById(`view-${t}`);
         if (el) el.classList.toggle('hidden', t !== tabId);
       });
 
       const headingMap = {
         dashboard: 'Executive Dashboard',
+        reports: 'Application Tracker & Status Reports Desk',
         gmail: 'Gmail Inbox Intelligence',
         feed: 'LinkedIn Feed Posts & Forms Desk',
         'easy-apply': 'Easy Apply & Target Job Listings Desk',
@@ -1656,7 +1932,8 @@ MERAKI_UI_HTML = """
     }
 
     function refreshTabView(tabId) {
-      if (tabId === 'dashboard') { loadManualTable(); loadGmailIntel(); }
+      if (tabId === 'dashboard') { loadManualTable(); loadGmailIntel(); loadScreeningPassed(); loadApplicationsTable(true); }
+      else if (tabId === 'reports') { loadApplicationsTable(); }
       else if (tabId === 'gmail') { loadGmailIntel(); }
       else if (tabId === 'feed' || tabId === 'forms') { loadFeedPosts(); }
       else if (tabId === 'easy-apply') { loadEasyApplyJobs(); }
@@ -1692,6 +1969,32 @@ MERAKI_UI_HTML = """
 
         if (d.naukri_boost?.timestamp) {
           document.getElementById('naukriLastBoostDate').innerText = d.naukri_boost.timestamp;
+        }
+
+        if (d.applications_stats) {
+          const st = d.applications_stats;
+          const totalApps = st.total || 0;
+          if (document.getElementById('sidebarReportsBadge')) document.getElementById('sidebarReportsBadge').innerText = totalApps;
+          if (document.getElementById('dashTrackerTotal')) document.getElementById('dashTrackerTotal').innerText = totalApps;
+          if (document.getElementById('dashTrackerApplied')) document.getElementById('dashTrackerApplied').innerText = st.applied || 0;
+          if (document.getElementById('dashTrackerScreening')) document.getElementById('dashTrackerScreening').innerText = st.screening || 0;
+          if (document.getElementById('dashTrackerHR')) document.getElementById('dashTrackerHR').innerText = st.hr_screening || 0;
+          if (document.getElementById('dashTrackerInterview')) document.getElementById('dashTrackerInterview').innerText = st.interview || 0;
+          if (document.getElementById('dashTrackerOffer')) document.getElementById('dashTrackerOffer').innerText = st.offer || 0;
+
+          if (document.getElementById('repCountAll')) document.getElementById('repCountAll').innerText = totalApps;
+          if (document.getElementById('repCountApplied')) document.getElementById('repCountApplied').innerText = st.applied || 0;
+          if (document.getElementById('repCountScreening')) document.getElementById('repCountScreening').innerText = st.screening || 0;
+          if (document.getElementById('repCountHR')) document.getElementById('repCountHR').innerText = st.hr_screening || 0;
+          if (document.getElementById('repCountInterview')) document.getElementById('repCountInterview').innerText = st.interview || 0;
+          if (document.getElementById('repCountOffer')) document.getElementById('repCountOffer').innerText = st.offer || 0;
+          if (document.getElementById('repCountRejected')) document.getElementById('repCountRejected').innerText = st.rejected || 0;
+        }
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (document.getElementById('lastRefreshTime')) {
+          document.getElementById('lastRefreshTime').innerText = timeStr;
         }
 
         const ct = d.current_task;
@@ -3287,18 +3590,524 @@ MERAKI_UI_HTML = """
       }).join('');
     }
 
+    // ==========================================
+    // APPLICATION TRACKER & REPORTS JAVASCRIPT
+    // ==========================================
+    let cachedApplications = [];
+    let trackerSearchQuery = '';
+    let trackerFilterStatus = 'All';
+    let trackerFilterSource = 'All';
+    let trackerCurrentPage = 1;
+    const trackerPageSize = 35;
+    let isTrackerInteracting = false;
+
+    function showTrackerToast(message, isSuccess = true) {
+      const toast = document.getElementById('trackerToast');
+      const msg = document.getElementById('trackerToastMsg');
+      const icon = document.getElementById('trackerToastIcon');
+      if (!toast || !msg) return;
+      msg.innerText = message;
+      if (isSuccess) {
+        icon.className = "fa-solid fa-circle-check text-emerald-400 text-sm";
+      } else {
+        icon.className = "fa-solid fa-triangle-exclamation text-amber-400 text-sm";
+      }
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 3500);
+    }
+
+    function getTrackerStatusStyle(status) {
+      if (status === 'Applied') return 'bg-blue-50 text-blue-800 border-blue-200';
+      if (status === 'Screening / Assessment') return 'bg-purple-50 text-purple-800 border-purple-200 font-bold';
+      if (status === 'HR Screening Call') return 'bg-amber-50 text-amber-900 border-amber-300 font-bold';
+      if (status === 'Interview Scheduled') return 'bg-teal-50 text-teal-900 border-teal-300 font-bold';
+      if (status === 'Offer') return 'bg-emerald-50 text-emerald-900 border-emerald-300 font-extrabold';
+      if (status === 'Rejected') return 'bg-slate-100 text-slate-500 border-slate-200';
+      if (status === 'On Hold') return 'bg-orange-50 text-orange-800 border-orange-200';
+      return 'bg-slate-50 text-slate-700 border-slate-200';
+    }
+
+    function getTrackerSourceBadge(source) {
+      if (source === 'Naukri') {
+        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">Naukri</span>';
+      }
+      if (source === 'LinkedIn Easy Apply') {
+        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">Easy Apply</span>';
+      }
+      if (source === 'Direct Portal') {
+        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">Direct Portal</span>';
+      }
+      if (source === 'Recruiter Email / Direct') {
+        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">Recruiter Email</span>';
+      }
+      if (source === 'Manual / Recruiter Call') {
+        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">Recruiter Call</span>';
+      }
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${source || 'Other'}</span>`;
+    }
+
+    async function loadApplicationsTable(silent = false) {
+      try {
+        const res = await fetch('/api/applications');
+        const data = await res.json();
+        cachedApplications = data.applications || [];
+        const stats = data.stats || {};
+
+        if (document.getElementById('repCountAll')) document.getElementById('repCountAll').innerText = stats.total ?? cachedApplications.length;
+        if (document.getElementById('repCountApplied')) document.getElementById('repCountApplied').innerText = stats.applied ?? 0;
+        if (document.getElementById('repCountScreening')) document.getElementById('repCountScreening').innerText = stats.screening ?? 0;
+        if (document.getElementById('repCountHR')) document.getElementById('repCountHR').innerText = stats.hr_screening ?? 0;
+        if (document.getElementById('repCountInterview')) document.getElementById('repCountInterview').innerText = stats.interview ?? 0;
+        if (document.getElementById('repCountOffer')) document.getElementById('repCountOffer').innerText = stats.offer ?? 0;
+        if (document.getElementById('repCountRejected')) document.getElementById('repCountRejected').innerText = stats.rejected ?? 0;
+
+        if (document.getElementById('sidebarReportsBadge')) document.getElementById('sidebarReportsBadge').innerText = stats.total ?? cachedApplications.length;
+        if (document.getElementById('dashTrackerTotal')) document.getElementById('dashTrackerTotal').innerText = stats.total ?? cachedApplications.length;
+        if (document.getElementById('dashTrackerApplied')) document.getElementById('dashTrackerApplied').innerText = stats.applied ?? 0;
+        if (document.getElementById('dashTrackerScreening')) document.getElementById('dashTrackerScreening').innerText = stats.screening ?? 0;
+        if (document.getElementById('dashTrackerHR')) document.getElementById('dashTrackerHR').innerText = stats.hr_screening ?? 0;
+        if (document.getElementById('dashTrackerInterview')) document.getElementById('dashTrackerInterview').innerText = stats.interview ?? 0;
+        if (document.getElementById('dashTrackerOffer')) document.getElementById('dashTrackerOffer').innerText = stats.offer ?? 0;
+
+        renderApplicationsTable();
+      } catch (e) {
+        if (!silent) console.warn("Error fetching applications:", e);
+      }
+    }
+
+    function renderApplicationsTable() {
+      const tbody = document.getElementById('trackerTableBody');
+      if (!tbody) return;
+
+      let filtered = cachedApplications.filter(app => {
+        if (trackerFilterStatus !== 'All' && (app.status || '').toLowerCase() !== trackerFilterStatus.toLowerCase()) {
+          return false;
+        }
+        if (trackerFilterSource !== 'All' && (app.source || '').toLowerCase() !== trackerFilterSource.toLowerCase()) {
+          return false;
+        }
+        if (trackerSearchQuery) {
+          const q = trackerSearchQuery.toLowerCase();
+          const matchComp = (app.company || '').toLowerCase().includes(q);
+          const matchRole = (app.role || '').toLowerCase().includes(q);
+          const matchRecr = (app.recruiter_name || '').toLowerCase().includes(q);
+          const matchCont = (app.recruiter_contact || '').toLowerCase().includes(q);
+          const matchNote = (app.notes || '').toLowerCase().includes(q);
+          if (!matchComp && !matchRole && !matchRecr && !matchCont && !matchNote) return false;
+        }
+        return true;
+      });
+
+      const totalMatches = filtered.length;
+      const countPill = document.getElementById('trackerShowingCount');
+      if (countPill) countPill.innerText = `${totalMatches} matching`;
+
+      const totalPages = Math.ceil(totalMatches / trackerPageSize) || 1;
+      if (trackerCurrentPage > totalPages) trackerCurrentPage = totalPages;
+      if (trackerCurrentPage < 1) trackerCurrentPage = 1;
+
+      const pageInfo = document.getElementById('trackerPaginationInfo');
+      if (pageInfo) pageInfo.innerText = `Showing ${(trackerCurrentPage - 1) * trackerPageSize + 1} - ${Math.min(trackerCurrentPage * trackerPageSize, totalMatches)} of ${totalMatches} applications`;
+
+      const curPageNum = document.getElementById('trackerCurrentPageNum');
+      if (curPageNum) curPageNum.innerText = `${trackerCurrentPage} / ${totalPages}`;
+
+      const btnPrev = document.getElementById('btnTrackerPrev');
+      const btnNext = document.getElementById('btnTrackerNext');
+      if (btnPrev) btnPrev.disabled = trackerCurrentPage <= 1;
+      if (btnNext) btnNext.disabled = trackerCurrentPage >= totalPages;
+
+      if (!totalMatches) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400">No applications found matching the selected filters.</td></tr>`;
+        return;
+      }
+
+      const startIdx = (trackerCurrentPage - 1) * trackerPageSize;
+      const pageSlice = filtered.slice(startIdx, startIdx + trackerPageSize);
+
+      const statusOptions = [
+        "Applied",
+        "Screening / Assessment",
+        "HR Screening Call",
+        "Interview Scheduled",
+        "Offer",
+        "On Hold",
+        "Rejected"
+      ];
+
+      tbody.innerHTML = pageSlice.map(app => {
+        const curStatus = app.status || 'Applied';
+        const statusClass = getTrackerStatusStyle(curStatus);
+        const sourceBadge = getTrackerSourceBadge(app.source);
+
+        const optionsHtml = statusOptions.map(st => `
+          <option value="${st}" ${st === curStatus ? 'selected' : ''}>${st}</option>
+        `).join('');
+
+        const jobLinkHtml = app.job_url ? `
+          <a href="${app.job_url}" target="_blank" title="Open Job/Application URL" class="text-indigo-600 hover:text-indigo-800 text-xs ml-1 inline-flex items-center">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+        ` : '';
+
+        const recruiterInfo = (app.recruiter_name || app.recruiter_contact) ? `
+          <div>
+            <div class="font-bold text-slate-800 flex items-center gap-1">
+              <i class="fa-solid fa-user-tie text-[10px] text-slate-400"></i>
+              <span>${app.recruiter_name || 'Recruiter'}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 truncate max-w-[180px]" title="${app.recruiter_contact}">
+              ${app.recruiter_contact || ''}
+            </div>
+          </div>
+        ` : `<span class="text-slate-400 text-[11px] italic">Not set</span>`;
+
+        const notesText = app.notes || '';
+        const notesDisplay = notesText ? `
+          <div class="text-[11px] text-slate-600 max-w-xs line-clamp-2" title="${notesText}">
+            ${notesText}
+          </div>
+        ` : `<span class="text-slate-400 text-[11px] italic">No stage notes added</span>`;
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition group">
+            <td class="p-3 whitespace-nowrap text-slate-500 font-mono text-[11px]">
+              <div>${app.timestamp ? app.timestamp.split(' ')[0] : 'Recent'}</div>
+              <div class="text-[10px] text-slate-400">${app.id || ''}</div>
+            </td>
+            <td class="p-3">
+              <div class="font-bold text-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-building text-slate-400 text-xs"></i>
+                <span>${app.company || 'Unknown'}</span>
+                ${jobLinkHtml}
+              </div>
+              <div class="text-slate-600 font-medium text-xs mt-0.5">${app.role || 'Role'}</div>
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              ${sourceBadge}
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              <select onchange="updateApplicationStatus('${app.id}', this.value, this)"
+                      class="px-2.5 py-1 rounded-xl text-xs font-semibold border ${statusClass} focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition">
+                ${optionsHtml}
+              </select>
+            </td>
+            <td class="p-3">
+              ${recruiterInfo}
+            </td>
+            <td class="p-3">
+              ${notesDisplay}
+            </td>
+            <td class="p-3 text-right whitespace-nowrap space-x-1.5">
+              <button onclick="openEditApplicationModal('${app.id}')" title="Edit Application Details & Notes"
+                      class="px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg text-xs font-semibold transition cursor-pointer">
+                <i class="fa-solid fa-pen-to-square"></i> Edit
+              </button>
+              <button onclick="deleteApplication('${app.id}')" title="Delete application record"
+                      class="px-2 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-400 rounded-lg text-xs transition cursor-pointer">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function updateApplicationStatus(appId, newStatus, selectEl) {
+      if (selectEl) {
+        selectEl.disabled = true;
+      }
+      try {
+        const res = await fetch('/api/applications/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: appId, status: newStatus })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showTrackerToast(`Status changed to "${newStatus}"`, true);
+          // Update cached item
+          const it = cachedApplications.find(a => a.id === appId);
+          if (it) {
+            it.status = newStatus;
+            it.last_updated = new Date().toISOString();
+          }
+          if (selectEl) {
+            selectEl.className = `px-2.5 py-1 rounded-xl text-xs font-semibold border ${getTrackerStatusStyle(newStatus)} focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition`;
+          }
+          // Refresh background stats
+          pollDashboardData();
+        } else {
+          showTrackerToast(d.error || "Failed to update status", false);
+          if (selectEl) selectEl.disabled = false;
+        }
+      } catch (e) {
+        showTrackerToast("Network error updating status", false);
+        if (selectEl) selectEl.disabled = false;
+      } finally {
+        if (selectEl) selectEl.disabled = false;
+      }
+    }
+
+    function openAddApplicationModal() {
+      document.getElementById('formAddApplication').reset();
+      document.getElementById('modalAddApplication').classList.remove('hidden');
+    }
+
+    function closeAddApplicationModal() {
+      document.getElementById('modalAddApplication').classList.add('hidden');
+    }
+
+    async function submitAddApplication(e) {
+      e.preventDefault();
+      const company = document.getElementById('addAppCompany').value.trim();
+      const role = document.getElementById('addAppRole').value.trim();
+      const source = document.getElementById('addAppSource').value;
+      const status = document.getElementById('addAppStatus').value;
+      const recruiter_name = document.getElementById('addAppRecruiterName').value.trim();
+      const recruiter_contact = document.getElementById('addAppRecruiterContact').value.trim();
+      const job_url = document.getElementById('addAppJobUrl').value.trim();
+      const notes = document.getElementById('addAppNotes').value.trim();
+
+      if (!company || !role) {
+        alert("Please enter both Company and Role.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/applications/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company, role, source, status, recruiter_name, recruiter_contact, job_url, notes
+          })
+        });
+        const d = await res.json();
+        if (d.success) {
+          closeAddApplicationModal();
+          showTrackerToast(`Added application for ${company}!`, true);
+          await loadApplicationsTable();
+          pollDashboardData();
+        } else {
+          alert(d.error || "Failed to add application");
+        }
+      } catch (err) {
+        alert("Network error: " + err);
+      }
+    }
+
+    function openEditApplicationModal(appId) {
+      const app = cachedApplications.find(a => a.id === appId);
+      if (!app) return;
+
+      document.getElementById('editAppId').value = app.id;
+      document.getElementById('editAppCompany').value = app.company || '';
+      document.getElementById('editAppRole').value = app.role || '';
+      document.getElementById('editAppStatus').value = app.status || 'Applied';
+      document.getElementById('editAppRecruiterName').value = app.recruiter_name || '';
+      document.getElementById('editAppRecruiterContact').value = app.recruiter_contact || '';
+      document.getElementById('editAppNotes').value = app.notes || '';
+
+      const histBox = document.getElementById('editAppHistoryList');
+      if (histBox) {
+        const hist = app.history || [];
+        if (!hist.length) {
+          histBox.innerHTML = '<div class="italic text-slate-400">No previous status history logged.</div>';
+        } else {
+          histBox.innerHTML = hist.map(h => `
+            <div class="flex items-start gap-1.5 border-b border-slate-100 pb-1">
+              <span class="text-[10px] text-slate-400 font-mono whitespace-nowrap">${h.timestamp || ''}</span>
+              <span class="font-bold text-slate-700">${h.status || ''}:</span>
+              <span class="text-slate-600">${h.note || ''}</span>
+            </div>
+          `).join('');
+        }
+      }
+
+      document.getElementById('modalEditApplication').classList.remove('hidden');
+    }
+
+    function closeEditApplicationModal() {
+      document.getElementById('modalEditApplication').classList.add('hidden');
+    }
+
+    async function submitEditApplication(e) {
+      e.preventDefault();
+      const id = document.getElementById('editAppId').value;
+      const company = document.getElementById('editAppCompany').value.trim();
+      const role = document.getElementById('editAppRole').value.trim();
+      const status = document.getElementById('editAppStatus').value;
+      const recruiter_name = document.getElementById('editAppRecruiterName').value.trim();
+      const recruiter_contact = document.getElementById('editAppRecruiterContact').value.trim();
+      const notes = document.getElementById('editAppNotes').value.trim();
+
+      try {
+        const res = await fetch('/api/applications/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id, company, role, status, recruiter_name, recruiter_contact, notes
+          })
+        });
+        const d = await res.json();
+        if (d.success) {
+          closeEditApplicationModal();
+          showTrackerToast(`Updated application for ${company}!`, true);
+          await loadApplicationsTable();
+          pollDashboardData();
+        } else {
+          alert(d.error || "Failed to update application");
+        }
+      } catch (err) {
+        alert("Network error: " + err);
+      }
+    }
+
+    async function deleteApplication(appId) {
+      const app = cachedApplications.find(a => a.id === appId);
+      const name = app ? `${app.company} (${app.role})` : 'this application';
+      if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+
+      try {
+        const res = await fetch('/api/applications/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: appId })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showTrackerToast(`Application deleted`, true);
+          await loadApplicationsTable();
+          pollDashboardData();
+        } else {
+          alert("Failed to delete application");
+        }
+      } catch (err) {
+        alert("Network error: " + err);
+      }
+    }
+
+    async function syncApplicationSources() {
+      const icon1 = document.getElementById('syncTrackerBtnIcon');
+      const icon2 = document.getElementById('syncTrackerIconDash');
+      if (icon1) icon1.classList.add('fa-spin');
+      if (icon2) icon2.classList.add('fa-spin');
+
+      try {
+        const res = await fetch('/api/applications/sync', { method: 'POST' });
+        const d = await res.json();
+        if (d.success) {
+          const r = d.result || {};
+          showTrackerToast(`Synced ${r.total_applications || 0} applications! (Promoted ${r.email_promoted || 0} via Email Intel)`, true);
+          await loadApplicationsTable();
+          pollDashboardData();
+        } else {
+          showTrackerToast("Sync failed", false);
+        }
+      } catch (err) {
+        showTrackerToast("Sync network error", false);
+      } finally {
+        if (icon1) icon1.classList.remove('fa-spin');
+        if (icon2) icon2.classList.remove('fa-spin');
+      }
+    }
+
+    function downloadApplicationsReport() {
+      showTrackerToast("Preparing CSV report download...", true);
+      window.location.href = '/api/applications/export';
+    }
+
+    function handleTrackerSearch() {
+      trackerSearchQuery = document.getElementById('trackerSearchInput').value;
+      trackerCurrentPage = 1;
+      renderApplicationsTable();
+    }
+
+    function handleTrackerFilterChange() {
+      trackerFilterStatus = document.getElementById('trackerStatusSelect').value;
+      trackerFilterSource = document.getElementById('trackerSourceSelect').value;
+      trackerCurrentPage = 1;
+      renderApplicationsTable();
+    }
+
+    function resetTrackerFilters() {
+      document.getElementById('trackerSearchInput').value = '';
+      document.getElementById('trackerStatusSelect').value = 'All';
+      document.getElementById('trackerSourceSelect').value = 'All';
+      trackerSearchQuery = '';
+      trackerFilterStatus = 'All';
+      trackerFilterSource = 'All';
+      trackerCurrentPage = 1;
+      renderApplicationsTable();
+    }
+
+    function filterTrackerByStatus(status) {
+      const sel = document.getElementById('trackerStatusSelect');
+      if (sel) sel.value = status;
+      trackerFilterStatus = status;
+      trackerCurrentPage = 1;
+      renderApplicationsTable();
+    }
+
+    function trackerPrevPage() {
+      if (trackerCurrentPage > 1) {
+        trackerCurrentPage--;
+        renderApplicationsTable();
+      }
+    }
+
+    function trackerNextPage() {
+      trackerCurrentPage++;
+      renderApplicationsTable();
+    }
+
+    async function manualRefreshData() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.classList.add('fa-spin');
+      showTrackerToast("Syncing real-time updates...", true);
+      try {
+        await pollDashboardData();
+        if (activeTab === 'reports') {
+          await loadApplicationsTable();
+        } else {
+          refreshTabView(activeTab);
+        }
+        showTrackerToast("Dashboard data synchronized!", true);
+      } catch (err) {
+        console.warn("Manual refresh failed:", err);
+      } finally {
+        if (icon) icon.classList.remove('fa-spin');
+      }
+    }
+
     // Smart Load-Managed Polling: Stats + Logs when active; only refresh currently visible tab
     setInterval(pollDashboardData, 4000);
     setInterval(() => {
       if (activeTab === 'terminal') pollLogs();
     }, 2000);
     setInterval(() => {
-      refreshTabView(activeTab);
+      if (activeTab === 'reports') {
+        const modalAdd = document.getElementById('modalAddApplication');
+        const modalEdit = document.getElementById('modalEditApplication');
+        const searchInput = document.getElementById('trackerSearchInput');
+        const isModalOpen = (modalAdd && !modalAdd.classList.contains('hidden')) || (modalEdit && !modalEdit.classList.contains('hidden'));
+        const isSearchFocused = searchInput && document.activeElement === searchInput;
+        if (!isModalOpen && !isSearchFocused) {
+          loadApplicationsTable(true);
+        }
+      } else {
+        refreshTabView(activeTab);
+      }
     }, 6000);
 
     // Initial Boot Fetch
     pollDashboardData();
     pollLogs();
+    loadApplicationsTable(true);
     loadManualTable();
     loadGmailIntel();
     loadFeedPosts();
@@ -3369,6 +4178,190 @@ MERAKI_UI_HTML = """
       </div>
     </div>
   </div>
+
+  <!-- Modal: Add Manual Application / Log Recruiter Call -->
+  <div id="modalAddApplication" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <i class="fa-solid fa-phone-volume text-sm"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-slate-900 text-sm">Log Application / Recruiter Call</h4>
+            <p class="text-[11px] text-slate-400">Add an external job, headhunter call, or direct outreach</p>
+          </div>
+        </div>
+        <button onclick="closeAddApplicationModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
+      </div>
+
+      <form id="formAddApplication" onsubmit="submitAddApplication(event)" class="p-6 space-y-4 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Company Name <span class="text-rose-500">*</span></label>
+            <input type="text" id="addAppCompany" required placeholder="e.g. Bain & Company, Zepto"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Role / Title <span class="text-rose-500">*</span></label>
+            <input type="text" id="addAppRole" required placeholder="e.g. Product Analyst, APM"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Application Channel</label>
+            <select id="addAppSource" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-slate-50">
+              <option value="Manual / Recruiter Call">Recruiter Call / Phone</option>
+              <option value="Naukri">Naukri Autopilot</option>
+              <option value="LinkedIn Easy Apply">LinkedIn Easy Apply</option>
+              <option value="Direct Portal">Direct Career Portal</option>
+              <option value="Recruiter Email / Direct">Recruiter Email Outreach</option>
+              <option value="Campus / Referral">Campus / Referral</option>
+              <option value="Other">Other Channel</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Current Lifecycle Status</label>
+            <select id="addAppStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-slate-50">
+              <option value="Applied">Applied</option>
+              <option value="Screening / Assessment">Screening / Assessment</option>
+              <option value="HR Screening Call" selected>HR Screening Call</option>
+              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Offer">Offer</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Recruiter / HR Name</label>
+            <input type="text" id="addAppRecruiterName" placeholder="e.g. Priya Sharma (HR Lead)"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Recruiter Phone or Email</label>
+            <input type="text" id="addAppRecruiterContact" placeholder="e.g. +91 98765 43210 / priya@..."
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Job or Career Link (Optional)</label>
+          <input type="text" id="addAppJobUrl" placeholder="https://careers..."
+                 class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Stage Notes & Recruitment Details</label>
+          <textarea id="addAppNotes" rows="2" placeholder="e.g. HR discussed compensation, 30 days notice acceptable, technical Round 1 scheduled for Friday 3 PM."
+                    class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeAddApplicationModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-check"></i>
+            <span>Save Application Entry</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Application / Notes / Status -->
+  <div id="modalEditApplication" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <i class="fa-solid fa-pen-to-square text-sm"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-slate-900 text-sm">Update Recruitment Progress</h4>
+            <p class="text-[11px] text-slate-400" id="editModalSubheading">Modify status, notes, or recruiter details</p>
+          </div>
+        </div>
+        <button onclick="closeEditApplicationModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
+      </div>
+
+      <form id="formEditApplication" onsubmit="submitEditApplication(event)" class="p-6 space-y-4 text-xs">
+        <input type="hidden" id="editAppId">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Company</label>
+            <input type="text" id="editAppCompany" required
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Role Title</label>
+            <input type="text" id="editAppRole" required
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Lifecycle Status</label>
+            <select id="editAppStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold bg-slate-50">
+              <option value="Applied">Applied</option>
+              <option value="Screening / Assessment">Screening / Assessment</option>
+              <option value="HR Screening Call">HR Screening Call</option>
+              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Offer">Offer</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Recruiter Name</label>
+            <input type="text" id="editAppRecruiterName" placeholder="Recruiter / HR"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Recruiter Phone / Email / Link</label>
+          <input type="text" id="editAppRecruiterContact" placeholder="Phone or email"
+                 class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Stage Progress & Notes</label>
+          <textarea id="editAppNotes" rows="3" placeholder="Latest update, interview feedback, next scheduled round..."
+                    class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"></textarea>
+        </div>
+
+        <!-- History log -->
+        <div id="editAppHistoryBox" class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 max-h-32 overflow-y-auto custom-scroll">
+          <p class="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Status History Log</p>
+          <div id="editAppHistoryList" class="space-y-1 text-[11px] text-slate-600"></div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeEditApplicationModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Update Progress</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="trackerToast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold border border-slate-700">
+    <i class="fa-solid fa-circle-check text-emerald-400 text-sm" id="trackerToastIcon"></i>
+    <span id="trackerToastMsg">Notification</span>
+  </div>
 </body>
 </html>
 """
@@ -3392,6 +4385,89 @@ def logs():
 @app.route("/api/manual_queue")
 def manual_queue():
     return jsonify({"queue": load_manual_queue()})
+
+
+@app.route("/api/applications")
+def api_applications():
+    status = request.args.get("status")
+    source = request.args.get("source")
+    search = request.args.get("search")
+    return jsonify({
+        "applications": app_tracker.get_all(status=status, source=source, search=search),
+        "stats": app_tracker.get_stats()
+    })
+
+
+@app.route("/api/applications/add", methods=["POST"])
+def api_applications_add():
+    data = request.json or {}
+    company = data.get("company", "").strip()
+    role = data.get("role", "").strip()
+    if not company or not role:
+        return jsonify({"success": False, "error": "Company and Role are required."}), 400
+
+    entry = app_tracker.add_application(
+        company=company,
+        role=role,
+        source=data.get("source", "Manual / Recruiter Call"),
+        status=data.get("status", "Applied"),
+        recruiter_name=data.get("recruiter_name", ""),
+        recruiter_contact=data.get("recruiter_contact", ""),
+        job_url=data.get("job_url", ""),
+        notes=data.get("notes", ""),
+        timestamp=data.get("timestamp")
+    )
+    return jsonify({"success": True, "application": entry})
+
+
+@app.route("/api/applications/update", methods=["POST"])
+def api_applications_update():
+    data = request.json or {}
+    app_id = data.get("id")
+    if not app_id:
+        return jsonify({"success": False, "error": "Application ID is required."}), 400
+
+    updated = app_tracker.update_application(
+        app_id=app_id,
+        status=data.get("status"),
+        notes=data.get("notes"),
+        recruiter_name=data.get("recruiter_name"),
+        recruiter_contact=data.get("recruiter_contact"),
+        role=data.get("role"),
+        company=data.get("company")
+    )
+    if not updated:
+        return jsonify({"success": False, "error": "Application not found."}), 404
+    return jsonify({"success": True, "application": updated})
+
+
+@app.route("/api/applications/delete", methods=["POST"])
+def api_applications_delete():
+    data = request.json or {}
+    app_id = data.get("id")
+    if not app_id:
+        return jsonify({"success": False, "error": "Application ID is required."}), 400
+
+    ok = app_tracker.delete_application(app_id)
+    return jsonify({"success": ok})
+
+
+@app.route("/api/applications/sync", methods=["POST"])
+def api_applications_sync():
+    res = app_tracker.sync_all_sources()
+    return jsonify({"success": True, "result": res, "stats": app_tracker.get_stats()})
+
+
+@app.route("/api/applications/export")
+def api_applications_export():
+    app_tracker._sync_to_csv(app_tracker._read_apps())
+    now_str = datetime.now().strftime("%Y%m%d")
+    return send_file(
+        app_tracker.csv_path,
+        mimetype="text/csv",
+        as_attachment=True,
+        download_name=f"career_applications_report_{now_str}.csv"
+    )
 
 
 @app.route("/api/naukri_applied")
@@ -4665,6 +5741,18 @@ def autonomous_8h_scheduler():
 # Launch autonomous 8h scheduler thread immediately on server startup
 sched_thread = threading.Thread(target=autonomous_8h_scheduler, daemon=True)
 sched_thread.start()
+
+
+def _initial_applications_sync():
+    try:
+        time.sleep(2)
+        app_tracker.sync_all_sources()
+        logger.info("[Tracker] Initial multi-source applications sync completed.")
+    except Exception as e:
+        logger.error(f"[Tracker] Initial sync error: {e}")
+
+
+threading.Thread(target=_initial_applications_sync, daemon=True).start()
 
 
 if __name__ == "__main__":

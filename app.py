@@ -708,78 +708,57 @@ MERAKI_UI_HTML = """
 
         </div>
 
-        <!-- Unified Application Status & Reports Funnel Card -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <!-- Pipeline Overview Card -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <i class="fa-solid fa-clipboard-check text-emerald-600"></i>
-                <span>Application Tracker & Multi-Channel Hiring Pipeline</span>
-              </h3>
-              <p class="text-xs text-slate-500">Live recruitment tracking across Naukri Autopilot, LinkedIn Easy Apply, Direct Portals, Recruiter Emails, and Calls.</p>
+              <h3 class="font-bold text-slate-900 text-sm">Pipeline</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Application lifecycle across active channels.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <button onclick="openAddApplicationModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs py-1.5 px-3 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer">
-                <i class="fa-solid fa-phone-volume"></i>
-                <span>+ Log Recruiter Call</span>
+              <button onclick="openAddApplicationModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+                <span>Log call</span>
               </button>
-              <button onclick="syncApplicationSources()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 border border-slate-300 cursor-pointer">
-                <i class="fa-solid fa-arrows-rotate text-indigo-600" id="syncTrackerIconDash"></i>
-                <span>Sync Email Intel</span>
+              <button onclick="syncApplicationSources()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                <i class="fa-solid fa-arrows-rotate text-slate-500 text-[10px]" id="syncTrackerIconDash"></i>
+                <span>Sync email</span>
               </button>
-              <button onclick="downloadApplicationsReport()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs py-1.5 px-2.5 rounded-xl transition flex items-center gap-1.5 border border-indigo-200 cursor-pointer">
-                <i class="fa-solid fa-file-arrow-down text-indigo-600"></i>
-                <span>Export CSV Report</span>
+              <button onclick="downloadApplicationsReport()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs py-2 px-3 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                <i class="fa-solid fa-download text-slate-500 text-[10px]"></i>
+                <span>Export CSV</span>
               </button>
-              <button onclick="switchTab('reports')" class="text-xs text-indigo-600 font-bold hover:underline px-2 py-1 cursor-pointer">
-                View Full Reports Tab &rarr;
+              <button onclick="switchTab('reports')" class="text-xs text-indigo-600 font-semibold hover:text-indigo-800 transition px-2 py-1.5 cursor-pointer">
+                View all &rarr;
               </button>
             </div>
           </div>
 
           <!-- Status Funnel Pills -->
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
-            <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3 cursor-pointer hover:bg-slate-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('All');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-slate-500">Total Tracked</p>
-                <i class="fa-solid fa-layer-group text-slate-400 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-slate-900 mt-1" id="dashTrackerTotal">0</h4>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('All');">
+              <p class="text-[11px] font-medium text-slate-500">Tracked</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerTotal">0</h4>
             </div>
-            <div class="bg-blue-50/70 border border-blue-200/70 rounded-xl p-3 cursor-pointer hover:bg-blue-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Applied');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-blue-700">Applied</p>
-                <i class="fa-solid fa-paper-plane text-blue-500 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-blue-900 mt-1" id="dashTrackerApplied">0</h4>
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Applied');">
+              <p class="text-[11px] font-medium text-slate-500">Applied</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerApplied">0</h4>
             </div>
-            <div class="bg-purple-50/70 border border-purple-200/70 rounded-xl p-3 cursor-pointer hover:bg-purple-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Screening / Assessment');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-purple-700">Tests / Screening</p>
-                <i class="fa-solid fa-vial-circle-check text-purple-500 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-purple-900 mt-1" id="dashTrackerScreening">0</h4>
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Screening / Assessment');">
+              <p class="text-[11px] font-medium text-slate-500">Screening</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerScreening">0</h4>
             </div>
-            <div class="bg-amber-50/70 border border-amber-200/70 rounded-xl p-3 cursor-pointer hover:bg-amber-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('HR Screening Call');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-amber-700">HR / Recruiter Calls</p>
-                <i class="fa-solid fa-headset text-amber-500 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-amber-900 mt-1" id="dashTrackerHR">0</h4>
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('HR Screening Call');">
+              <p class="text-[11px] font-medium text-slate-500">Recruiter calls</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerHR">0</h4>
             </div>
-            <div class="bg-teal-50/70 border border-teal-200/70 rounded-xl p-3 cursor-pointer hover:bg-teal-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Interview Scheduled');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-teal-700">Interviews</p>
-                <i class="fa-solid fa-calendar-check text-teal-500 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-teal-900 mt-1" id="dashTrackerInterview">0</h4>
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Interview Scheduled');">
+              <p class="text-[11px] font-medium text-slate-500">Interviews</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerInterview">0</h4>
             </div>
-            <div class="bg-emerald-50/70 border border-emerald-200/70 rounded-xl p-3 cursor-pointer hover:bg-emerald-100 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Offer');">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-emerald-700">Offers</p>
-                <i class="fa-solid fa-award text-emerald-500 text-xs"></i>
-              </div>
-              <h4 class="text-xl font-bold text-emerald-900 mt-1" id="dashTrackerOffer">0</h4>
+            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 cursor-pointer hover:border-slate-300 transition shadow-xs" onclick="switchTab('reports'); filterTrackerByStatus('Offer');">
+              <p class="text-[11px] font-medium text-slate-500">Offers</p>
+              <h4 class="text-lg font-bold text-slate-900 mt-0.5" id="dashTrackerOffer">0</h4>
             </div>
           </div>
         </div>
@@ -853,74 +832,68 @@ MERAKI_UI_HTML = """
       <div id="view-reports" class="hidden space-y-6">
 
         <!-- Header Card -->
-        <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-6 rounded-3xl text-white shadow-xl border border-indigo-500/20 flex flex-wrap items-center justify-between gap-4">
-          <div class="space-y-1.5 max-w-2xl">
-            <div class="flex items-center gap-2">
-              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500 text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
-                <i class="fa-solid fa-chart-line text-slate-950"></i> Unified Recruitment Desk
-              </span>
-              <span class="text-xs text-indigo-300 font-medium">Naukri • LinkedIn • Direct • Email • Manual Calls</span>
-            </div>
-            <h3 class="text-xl font-bold text-white">Application Tracker & Lifecycle Status Reports</h3>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              Real-time central command for all job applications across channels. Filter by stage, update recruiter phone/screening notes, automatically capture incoming email invitations & assessment links, and export complete compliance reports.
+        <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-1 max-w-xl">
+            <h2 class="text-lg font-bold text-slate-900 tracking-tight">Tracker</h2>
+            <p class="text-xs text-slate-500 leading-relaxed">
+              Monitor applications, recruiter screening calls, and interview status across all channels.
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-2.5">
+          <div class="flex items-center gap-2">
             <button onclick="openAddApplicationModal()"
-                    class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer">
-              <i class="fa-solid fa-phone-volume text-sm"></i>
-              <span>+ Log Recruiter Call / Entry</span>
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs py-2 px-3.5 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+              <span>Log call</span>
             </button>
             <button onclick="syncApplicationSources()"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/30 cursor-pointer">
-              <i class="fa-solid fa-arrows-rotate text-sm" id="syncTrackerBtnIcon"></i>
-              <span>Sync Email Intel</span>
+                    class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs py-2 px-3.5 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5">
+              <i class="fa-solid fa-arrows-rotate text-slate-500 text-[10px]" id="syncTrackerBtnIcon"></i>
+              <span>Sync email</span>
             </button>
             <button onclick="downloadApplicationsReport()"
-                    class="bg-white/10 hover:bg-white/20 text-white font-semibold text-xs py-2.5 px-3.5 rounded-xl transition flex items-center gap-2 border border-white/20 cursor-pointer">
-              <i class="fa-solid fa-file-arrow-down text-sm"></i>
-              <span>Download CSV Report</span>
+                    class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs py-2 px-3.5 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5">
+              <i class="fa-solid fa-download text-slate-500 text-[10px]"></i>
+              <span>Download CSV</span>
             </button>
           </div>
         </div>
 
         <!-- KPI Status Cards Row (Clickable Filters) -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('All')">
-            <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">All Applications</p>
-            <h4 class="text-2xl font-black text-slate-900 mt-1" id="repCountAll">0</h4>
-            <span class="text-[10px] text-indigo-600 font-semibold">Total across all</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('All')">
+            <p class="text-xs font-medium text-slate-500">All applications</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountAll">0</h4>
+            <span class="text-[11px] text-slate-400">Total</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Applied')">
-            <p class="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Applied</p>
-            <h4 class="text-2xl font-black text-blue-700 mt-1" id="repCountApplied">0</h4>
-            <span class="text-[10px] text-slate-400 font-medium">Submitted</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('Applied')">
+            <p class="text-xs font-medium text-slate-500">Applied</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountApplied">0</h4>
+            <span class="text-[11px] text-slate-400">Submitted</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Screening / Assessment')">
-            <p class="text-[11px] font-semibold text-purple-600 uppercase tracking-wider">Screening / Tests</p>
-            <h4 class="text-2xl font-black text-purple-700 mt-1" id="repCountScreening">0</h4>
-            <span class="text-[10px] text-purple-600 font-semibold">Assessments / CBT</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('Screening / Assessment')">
+            <p class="text-xs font-medium text-slate-500">Screening</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountScreening">0</h4>
+            <span class="text-[11px] text-slate-400">Assessments</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('HR Screening Call')">
-            <p class="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Recruiter Calls</p>
-            <h4 class="text-2xl font-black text-amber-700 mt-1" id="repCountHR">0</h4>
-            <span class="text-[10px] text-amber-600 font-semibold">HR / Phone Screen</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('HR Screening Call')">
+            <p class="text-xs font-medium text-slate-500">Recruiter calls</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountHR">0</h4>
+            <span class="text-[11px] text-slate-400">Phone screens</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-teal-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Interview Scheduled')">
-            <p class="text-[11px] font-semibold text-teal-600 uppercase tracking-wider">Interviews</p>
-            <h4 class="text-2xl font-black text-teal-700 mt-1" id="repCountInterview">0</h4>
-            <span class="text-[10px] text-teal-600 font-semibold">Technical / Final</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('Interview Scheduled')">
+            <p class="text-xs font-medium text-slate-500">Interviews</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountInterview">0</h4>
+            <span class="text-[11px] text-slate-400">Technical & final</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Offer')">
-            <p class="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Offers</p>
-            <h4 class="text-2xl font-black text-emerald-700 mt-1" id="repCountOffer">0</h4>
-            <span class="text-[10px] text-emerald-600 font-semibold">Selected / Offers</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('Offer')">
+            <p class="text-xs font-medium text-slate-500">Offers</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountOffer">0</h4>
+            <span class="text-[11px] text-slate-400">Received</span>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-400 hover:shadow-md transition cursor-pointer" onclick="filterTrackerByStatus('Rejected')">
-            <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Archived / Rejected</p>
-            <h4 class="text-2xl font-black text-slate-600 mt-1" id="repCountRejected">0</h4>
-            <span class="text-[10px] text-slate-400 font-medium">Inactive</span>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-xs transition cursor-pointer" onclick="filterTrackerByStatus('Rejected')">
+            <p class="text-xs font-medium text-slate-500">Archived</p>
+            <h4 class="text-2xl font-bold text-slate-900 mt-1" id="repCountRejected">0</h4>
+            <span class="text-[11px] text-slate-400">Closed</span>
           </div>
         </div>
 
@@ -931,67 +904,67 @@ MERAKI_UI_HTML = """
             <div class="flex-1 min-w-[260px] relative">
               <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
               <input type="text" id="trackerSearchInput" oninput="handleTrackerSearch()"
-                     placeholder="Search by company, role title, recruiter name, or notes..."
-                     class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                     placeholder="Search applications..."
+                     class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             </div>
 
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2.5">
               <div class="flex items-center gap-1.5">
-                <span class="text-xs font-semibold text-slate-500">Status:</span>
+                <span class="text-xs text-slate-500">Status:</span>
                 <select id="trackerStatusSelect" onchange="handleTrackerFilterChange()"
-                        class="text-xs font-semibold border border-slate-300 rounded-xl px-2.5 py-1.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="All">All Statuses</option>
+                        class="text-xs font-medium border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50/50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="All">All statuses</option>
                   <option value="Applied">Applied</option>
-                  <option value="Screening / Assessment">Screening / Assessment</option>
-                  <option value="HR Screening Call">HR Screening Call</option>
-                  <option value="Interview Scheduled">Interview Scheduled</option>
+                  <option value="Screening / Assessment">Screening</option>
+                  <option value="HR Screening Call">Recruiter call</option>
+                  <option value="Interview Scheduled">Interview</option>
                   <option value="Offer">Offer</option>
-                  <option value="On Hold">On Hold</option>
+                  <option value="On Hold">On hold</option>
                   <option value="Rejected">Rejected</option>
                 </select>
               </div>
 
               <div class="flex items-center gap-1.5">
-                <span class="text-xs font-semibold text-slate-500">Source:</span>
+                <span class="text-xs text-slate-500">Source:</span>
                 <select id="trackerSourceSelect" onchange="handleTrackerFilterChange()"
-                        class="text-xs font-semibold border border-slate-300 rounded-xl px-2.5 py-1.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="All">All Sources</option>
-                  <option value="Naukri">Naukri Autopilot</option>
-                  <option value="LinkedIn Easy Apply">LinkedIn Easy Apply</option>
-                  <option value="Direct Portal">Direct Portal</option>
-                  <option value="Recruiter Email / Direct">Recruiter Email Outreach</option>
-                  <option value="Manual / Recruiter Call">Recruiter Call / Phone</option>
+                        class="text-xs font-medium border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50/50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="All">All sources</option>
+                  <option value="Naukri">Naukri</option>
+                  <option value="LinkedIn Easy Apply">Easy Apply</option>
+                  <option value="Direct Portal">Direct portal</option>
+                  <option value="Recruiter Email / Direct">Recruiter email</option>
+                  <option value="Manual / Recruiter Call">Recruiter call</option>
                 </select>
               </div>
 
               <button onclick="resetTrackerFilters()"
-                      class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer">
+                      class="text-xs text-slate-600 hover:text-slate-900 font-medium px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl transition cursor-pointer">
                 Reset
               </button>
 
-              <span class="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl ml-1" id="trackerShowingCount">
+              <span class="text-xs font-medium text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl ml-1" id="trackerShowingCount">
                 Loading...
               </span>
             </div>
           </div>
 
           <!-- Applications Table -->
-          <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <div class="overflow-x-auto rounded-xl border border-slate-200/80">
             <table class="w-full text-left text-xs">
-              <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <thead class="bg-slate-50/80 text-slate-500 font-medium text-xs border-b border-slate-200/80">
                 <tr>
-                  <th class="p-3">Applied / Date</th>
-                  <th class="p-3">Company & Role</th>
-                  <th class="p-3">Source Channel</th>
-                  <th class="p-3">Application Status (Interactive)</th>
-                  <th class="p-3">Recruiter / Contact</th>
-                  <th class="p-3">Notes & Next Action</th>
+                  <th class="p-3">Date</th>
+                  <th class="p-3">Company & role</th>
+                  <th class="p-3">Source</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Contact</th>
+                  <th class="p-3">Notes</th>
                   <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100" id="trackerTableBody">
-                <tr><td colspan="7" class="p-8 text-center text-slate-400">Loading application records...</td></tr>
+                <tr><td colspan="7" class="p-8 text-center text-slate-400">Loading applications...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3648,33 +3621,27 @@ MERAKI_UI_HTML = """
     }
 
     function getTrackerStatusStyle(status) {
-      if (status === 'Applied') return 'bg-blue-50 text-blue-800 border-blue-200';
-      if (status === 'Screening / Assessment') return 'bg-purple-50 text-purple-800 border-purple-200 font-bold';
-      if (status === 'HR Screening Call') return 'bg-amber-50 text-amber-900 border-amber-300 font-bold';
-      if (status === 'Interview Scheduled') return 'bg-teal-50 text-teal-900 border-teal-300 font-bold';
-      if (status === 'Offer') return 'bg-emerald-50 text-emerald-900 border-emerald-300 font-extrabold';
+      if (status === 'Applied') return 'bg-slate-50 text-slate-700 border-slate-200';
+      if (status === 'Screening / Assessment') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      if (status === 'HR Screening Call') return 'bg-amber-50 text-amber-800 border-amber-200';
+      if (status === 'Interview Scheduled') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      if (status === 'Offer') return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-semibold';
       if (status === 'Rejected') return 'bg-slate-100 text-slate-500 border-slate-200';
-      if (status === 'On Hold') return 'bg-orange-50 text-orange-800 border-orange-200';
+      if (status === 'On Hold') return 'bg-amber-50 text-amber-700 border-amber-200';
       return 'bg-slate-50 text-slate-700 border-slate-200';
     }
 
     function getTrackerSourceBadge(source) {
-      if (source === 'Naukri') {
-        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">Naukri</span>';
-      }
-      if (source === 'LinkedIn Easy Apply') {
-        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">Easy Apply</span>';
-      }
-      if (source === 'Direct Portal') {
-        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">Direct Portal</span>';
-      }
-      if (source === 'Recruiter Email / Direct') {
-        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">Recruiter Email</span>';
-      }
-      if (source === 'Manual / Recruiter Call') {
-        return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">Recruiter Call</span>';
-      }
-      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${source || 'Other'}</span>`;
+      const srcMap = {
+        'Naukri': 'Naukri',
+        'LinkedIn Easy Apply': 'Easy Apply',
+        'Direct Portal': 'Direct portal',
+        'Recruiter Email / Direct': 'Recruiter email',
+        'Manual / Recruiter Call': 'Recruiter call',
+        'Campus / Referral': 'Referral'
+      };
+      const label = srcMap[source] || source || 'Direct';
+      return `<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200/80">${label}</span>`;
     }
 
     async function loadApplicationsTable(silent = false) {
@@ -3711,6 +3678,10 @@ MERAKI_UI_HTML = """
       if (!tbody) return;
 
       let filtered = cachedApplications.filter(app => {
+        const comp = (app.company || '').trim().toLowerCase();
+        if (!comp || comp === 'unknown company' || comp === 'unknown') {
+          return false;
+        }
         if (trackerFilterStatus !== 'All' && (app.status || '').toLowerCase() !== trackerFilterStatus.toLowerCase()) {
           return false;
         }
@@ -3719,7 +3690,7 @@ MERAKI_UI_HTML = """
         }
         if (trackerSearchQuery) {
           const q = trackerSearchQuery.toLowerCase();
-          const matchComp = (app.company || '').toLowerCase().includes(q);
+          const matchComp = comp.includes(q);
           const matchRole = (app.role || '').toLowerCase().includes(q);
           const matchRecr = (app.recruiter_name || '').toLowerCase().includes(q);
           const matchCont = (app.recruiter_contact || '').toLowerCase().includes(q);
@@ -3807,19 +3778,19 @@ MERAKI_UI_HTML = """
               <div class="text-[10px] text-slate-400">${app.id || ''}</div>
             </td>
             <td class="p-3">
-              <div class="font-bold text-slate-900 flex items-center gap-1.5">
+              <div class="font-medium text-slate-900 flex items-center gap-1.5">
                 <i class="fa-solid fa-building text-slate-400 text-xs"></i>
                 <span>${app.company || 'Unknown'}</span>
                 ${jobLinkHtml}
               </div>
-              <div class="text-slate-600 font-medium text-xs mt-0.5">${app.role || 'Role'}</div>
+              <div class="text-slate-500 text-xs mt-0.5">${app.role || 'Role'}</div>
             </td>
             <td class="p-3 whitespace-nowrap">
               ${sourceBadge}
             </td>
             <td class="p-3 whitespace-nowrap">
               <select onchange="updateApplicationStatus('${app.id}', this.value, this)"
-                      class="px-2.5 py-1 rounded-xl text-xs font-semibold border ${statusClass} focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition">
+                      class="px-2.5 py-1 rounded-xl text-xs font-medium border ${statusClass} focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer transition">
                 ${optionsHtml}
               </select>
             </td>
@@ -3831,12 +3802,12 @@ MERAKI_UI_HTML = """
             </td>
             <td class="p-3 text-right whitespace-nowrap space-x-1.5">
               <button onclick="openEditApplicationModal('${app.id}')" title="Edit Application Details & Notes"
-                      class="px-2 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg text-xs font-semibold transition cursor-pointer">
-                <i class="fa-solid fa-pen-to-square"></i> Edit
+                      class="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg text-xs font-medium transition cursor-pointer shadow-xs">
+                <i class="fa-solid fa-pen-to-square text-[10px]"></i> Edit
               </button>
               <button onclick="deleteApplication('${app.id}')" title="Delete application record"
-                      class="px-2 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-400 rounded-lg text-xs transition cursor-pointer">
-                <i class="fa-solid fa-trash"></i>
+                      class="px-2 py-1 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 rounded-lg text-xs transition cursor-pointer shadow-xs">
+                <i class="fa-solid fa-trash text-[10px]"></i>
               </button>
             </td>
           </tr>
@@ -4207,57 +4178,52 @@ MERAKI_UI_HTML = """
   </div>
 
   <!-- Modal: Add Manual Application / Log Recruiter Call -->
-  <div id="modalAddApplication" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
-      <div class="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-            <i class="fa-solid fa-phone-volume text-sm"></i>
-          </div>
-          <div>
-            <h4 class="font-bold text-slate-900 text-sm">Log Application / Recruiter Call</h4>
-            <p class="text-[11px] text-slate-400">Add an external job, headhunter call, or direct outreach</p>
-          </div>
+  <div id="modalAddApplication" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h4 class="font-bold text-slate-900 text-sm">Log application</h4>
+          <p class="text-xs text-slate-500">Add an external job, recruiter call, or direct outreach</p>
         </div>
-        <button onclick="closeAddApplicationModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
+        <button onclick="closeAddApplicationModal()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">&times;</button>
       </div>
 
       <form id="formAddApplication" onsubmit="submitAddApplication(event)" class="p-6 space-y-4 text-xs">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Company Name <span class="text-rose-500">*</span></label>
+            <label class="block font-medium text-slate-700 mb-1">Company name <span class="text-rose-500">*</span></label>
             <input type="text" id="addAppCompany" required placeholder="e.g. Bain & Company, Zepto"
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Role / Title <span class="text-rose-500">*</span></label>
+            <label class="block font-medium text-slate-700 mb-1">Role <span class="text-rose-500">*</span></label>
             <input type="text" id="addAppRole" required placeholder="e.g. Product Analyst, APM"
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Application Channel</label>
-            <select id="addAppSource" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-slate-50">
-              <option value="Manual / Recruiter Call">Recruiter Call / Phone</option>
-              <option value="Naukri">Naukri Autopilot</option>
-              <option value="LinkedIn Easy Apply">LinkedIn Easy Apply</option>
-              <option value="Direct Portal">Direct Career Portal</option>
-              <option value="Recruiter Email / Direct">Recruiter Email Outreach</option>
-              <option value="Campus / Referral">Campus / Referral</option>
-              <option value="Other">Other Channel</option>
+            <label class="block font-medium text-slate-700 mb-1">Channel</label>
+            <select id="addAppSource" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50/50">
+              <option value="Manual / Recruiter Call">Recruiter call</option>
+              <option value="Naukri">Naukri</option>
+              <option value="LinkedIn Easy Apply">Easy Apply</option>
+              <option value="Direct Portal">Direct portal</option>
+              <option value="Recruiter Email / Direct">Recruiter email</option>
+              <option value="Campus / Referral">Referral</option>
+              <option value="Other">Other</option>
             </select>
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Current Lifecycle Status</label>
-            <select id="addAppStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-slate-50">
+            <label class="block font-medium text-slate-700 mb-1">Status</label>
+            <select id="addAppStatus" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50/50">
               <option value="Applied">Applied</option>
-              <option value="Screening / Assessment">Screening / Assessment</option>
-              <option value="HR Screening Call" selected>HR Screening Call</option>
-              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Screening / Assessment">Screening</option>
+              <option value="HR Screening Call" selected>Recruiter call</option>
+              <option value="Interview Scheduled">Interview</option>
               <option value="Offer">Offer</option>
-              <option value="On Hold">On Hold</option>
+              <option value="On Hold">On hold</option>
               <option value="Rejected">Rejected</option>
             </select>
           </div>
@@ -4265,36 +4231,36 @@ MERAKI_UI_HTML = """
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Recruiter / HR Name</label>
-            <input type="text" id="addAppRecruiterName" placeholder="e.g. Priya Sharma (HR Lead)"
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <label class="block font-medium text-slate-700 mb-1">Recruiter name</label>
+            <input type="text" id="addAppRecruiterName" placeholder="e.g. Priya Sharma"
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Recruiter Phone or Email</label>
-            <input type="text" id="addAppRecruiterContact" placeholder="e.g. +91 98765 43210 / priya@..."
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <label class="block font-medium text-slate-700 mb-1">Contact (phone or email)</label>
+            <input type="text" id="addAppRecruiterContact" placeholder="e.g. priya@company.com"
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
 
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Job or Career Link (Optional)</label>
+          <label class="block font-medium text-slate-700 mb-1">Job link (optional)</label>
           <input type="text" id="addAppJobUrl" placeholder="https://careers..."
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                 class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Stage Notes & Recruitment Details</label>
-          <textarea id="addAppNotes" rows="2" placeholder="e.g. HR discussed compensation, 30 days notice acceptable, technical Round 1 scheduled for Friday 3 PM."
-                    class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+          <label class="block font-medium text-slate-700 mb-1">Notes</label>
+          <textarea id="addAppNotes" rows="2" placeholder="e.g. Phone screen completed, technical round on Friday."
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
         </div>
 
         <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-          <button type="button" onclick="closeAddApplicationModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+          <button type="button" onclick="closeAddApplicationModal()" class="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
             Cancel
           </button>
-          <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer">
-            <i class="fa-solid fa-check"></i>
-            <span>Save Application Entry</span>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-check text-[10px]"></i>
+            <span>Save entry</span>
           </button>
         </div>
       </form>
@@ -4302,19 +4268,14 @@ MERAKI_UI_HTML = """
   </div>
 
   <!-- Modal: Edit Application / Notes / Status -->
-  <div id="modalEditApplication" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
-      <div class="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-            <i class="fa-solid fa-pen-to-square text-sm"></i>
-          </div>
-          <div>
-            <h4 class="font-bold text-slate-900 text-sm">Update Recruitment Progress</h4>
-            <p class="text-[11px] text-slate-400" id="editModalSubheading">Modify status, notes, or recruiter details</p>
-          </div>
+  <div id="modalEditApplication" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h4 class="font-bold text-slate-900 text-sm">Edit application</h4>
+          <p class="text-xs text-slate-500" id="editModalSubheading">Modify status, notes, or recruiter details</p>
         </div>
-        <button onclick="closeEditApplicationModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold cursor-pointer">&times;</button>
+        <button onclick="closeEditApplicationModal()" class="text-slate-400 hover:text-slate-600 text-lg cursor-pointer">&times;</button>
       </div>
 
       <form id="formEditApplication" onsubmit="submitEditApplication(event)" class="p-6 space-y-4 text-xs">
@@ -4322,64 +4283,67 @@ MERAKI_UI_HTML = """
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Company</label>
+            <label class="block font-medium text-slate-700 mb-1">Company <span class="text-rose-500">*</span></label>
             <input type="text" id="editAppCompany" required
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Role Title</label>
+            <label class="block font-medium text-slate-700 mb-1">Role <span class="text-rose-500">*</span></label>
             <input type="text" id="editAppRole" required
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Lifecycle Status</label>
-            <select id="editAppStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold bg-slate-50">
+            <label class="block font-medium text-slate-700 mb-1">Status</label>
+            <select id="editAppStatus" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium bg-slate-50/50">
               <option value="Applied">Applied</option>
-              <option value="Screening / Assessment">Screening / Assessment</option>
-              <option value="HR Screening Call">HR Screening Call</option>
-              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Screening / Assessment">Screening</option>
+              <option value="HR Screening Call">Recruiter call</option>
+              <option value="Interview Scheduled">Interview</option>
               <option value="Offer">Offer</option>
-              <option value="On Hold">On Hold</option>
+              <option value="On Hold">On hold</option>
               <option value="Rejected">Rejected</option>
             </select>
           </div>
           <div>
-            <label class="block font-bold text-slate-700 mb-1">Recruiter Name</label>
+            <label class="block font-medium text-slate-700 mb-1">Recruiter name</label>
             <input type="text" id="editAppRecruiterName" placeholder="Recruiter / HR"
-                   class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                   class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
 
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Recruiter Phone / Email / Link</label>
+          <label class="block font-medium text-slate-700 mb-1">Contact (phone, email, or link)</label>
           <input type="text" id="editAppRecruiterContact" placeholder="Phone or email"
-                 class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                 class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Stage Progress & Notes</label>
+          <label class="block font-medium text-slate-700 mb-1">Notes</label>
           <textarea id="editAppNotes" rows="3" placeholder="Latest update, interview feedback, next scheduled round..."
-                    class="w-full border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"></textarea>
+                    class="w-full border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
         </div>
 
         <!-- History log -->
-        <div id="editAppHistoryBox" class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 max-h-32 overflow-y-auto custom-scroll">
-          <p class="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Status History Log</p>
-          <div id="editAppHistoryList" class="space-y-1 text-[11px] text-slate-600"></div>
+        <div id="editAppHistoryBox" class="p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-1.5 max-h-32 overflow-y-auto custom-scroll">
+          <p class="font-medium text-xs text-slate-500">Status history</p>
+          <div id="editAppHistoryList" class="space-y-1 text-xs text-slate-600"></div>
         </div>
 
         <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-          <button type="button" onclick="closeEditApplicationModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+          <button type="button" onclick="closeEditApplicationModal()" class="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
             Cancel
           </button>
-          <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5 cursor-pointer">
-            <i class="fa-solid fa-floppy-disk"></i>
-            <span>Update Progress</span>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-check text-[10px]"></i>
+            <span>Save changes</span>
           </button>
         </div>
+      </form>
+    </div>
+  </div>
       </form>
     </div>
   </div>

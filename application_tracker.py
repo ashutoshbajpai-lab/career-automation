@@ -48,7 +48,8 @@ class ApplicationTracker:
         with self.lock:
             try:
                 with open(self.json_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    apps = json.load(f)
+                    return [a for a in apps if a.get("company", "").strip().lower() not in ["unknown company", "unknown", ""]]
             except Exception:
                 return []
 
@@ -266,7 +267,7 @@ class ApplicationTracker:
                         for r in reader:
                             comp = r.get("company", "").strip()
                             role = r.get("title", "").strip()
-                            if not comp or not role:
+                            if not comp or not role or comp.lower() in ["unknown company", "unknown"]:
                                 continue
                             norm_key = (
                                 re.sub(r"[^a-zA-Z0-9]", "", comp.lower()),
@@ -308,7 +309,7 @@ class ApplicationTracker:
                         for r in easy_list:
                             comp = r.get("company", "").strip()
                             role = r.get("title", "").strip()
-                            if not comp or not role:
+                            if not comp or not role or comp.lower() in ["unknown company", "unknown"]:
                                 continue
                             norm_key = (
                                 re.sub(r"[^a-zA-Z0-9]", "", comp.lower()),
@@ -350,7 +351,7 @@ class ApplicationTracker:
                         for r in reader:
                             comp = r.get("company", "").strip()
                             role = r.get("title", "").strip()
-                            if not comp or not role:
+                            if not comp or not role or comp.lower() in ["unknown company", "unknown"]:
                                 continue
                             norm_key = (
                                 re.sub(r"[^a-zA-Z0-9]", "", comp.lower()),
